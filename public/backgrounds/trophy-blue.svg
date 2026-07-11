@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <pattern id="p" width="200" height="200" patternUnits="userSpaceOnUse">
+      <g opacity="0.35">
+    <path d="M38 32 h24 v10 a12 12 0 0 1 -24 0 Z" fill="none" stroke="#ffd166" stroke-width="3"/>
+    <path d="M38 35 h-8 a8 8 0 0 0 8 9 M62 35 h8 a8 8 0 0 1 -8 9" fill="none" stroke="#ffd166" stroke-width="2.5"/>
+    <path d="M50 54 v8 M42 66 h16" stroke="#ffd166" stroke-width="3"/></g>
+      <g opacity="0.35" transform="translate(100 100)">
+    <path d="M38 32 h24 v10 a12 12 0 0 1 -24 0 Z" fill="none" stroke="#ffd166" stroke-width="3"/>
+    <path d="M38 35 h-8 a8 8 0 0 0 8 9 M62 35 h8 a8 8 0 0 1 -8 9" fill="none" stroke="#ffd166" stroke-width="2.5"/>
+    <path d="M50 54 v8 M42 66 h16" stroke="#ffd166" stroke-width="3"/></g>
+    </pattern>
+  </defs>
+  <rect width="1600" height="1600" fill="#1d4e89"/>
+  <rect width="1600" height="1600" fill="url(#p)"/>
+</svg>

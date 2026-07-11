@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <pattern id="p" width="200" height="200" patternUnits="userSpaceOnUse">
+      <g opacity="0.35">
+    <rect x="30" y="34" width="8" height="8" rx="1" fill="#ffd9ec" transform="rotate(20 34 38)"/>
+    <circle cx="64" cy="36" r="4" fill="#ffd9ec"/>
+    <rect x="58" y="60" width="8" height="8" rx="1" fill="#ffd9ec" transform="rotate(-25 62 64)"/>
+    <path d="M34 62 l5 8 h-10 Z" fill="#ffd9ec"/>
+    <circle cx="48" cy="50" r="3" fill="#ffd9ec"/></g>
+      <g opacity="0.35" transform="translate(100 100)">
+    <rect x="30" y="34" width="8" height="8" rx="1" fill="#ffd9ec" transform="rotate(20 34 38)"/>
+    <circle cx="64" cy="36" r="4" fill="#ffd9ec"/>
+    <rect x="58" y="60" width="8" height="8" rx="1" fill="#ffd9ec" transform="rotate(-25 62 64)"/>
+    <path d="M34 62 l5 8 h-10 Z" fill="#ffd9ec"/>
+    <circle cx="48" cy="50" r="3" fill="#ffd9ec"/></g>
+    </pattern>
+  </defs>
+  <rect width="1600" height="1600" fill="#8a2a63"/>
+  <rect width="1600" height="1600" fill="url(#p)"/>
+</svg>

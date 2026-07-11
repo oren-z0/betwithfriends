@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1117" />
+  <title>BetWithFriends — friendly betting pools over nostr ⚡</title>
+  <meta name="description" content="Create a private betting pool, share a link, and let friends bet with lightning zaps. No server, no signup — just nostr." />
+  <script type="module" src="/src/main.ts"></script>
+</head>
+<body x-data="app" :style="route === 'pool' ? poolBackgroundStyle() : route === 'create' ? createBackgroundStyle() : ''" class="app-bg">
+
+  <!-- ===================== Disclaimer gate ===================== -->
+  <template x-if="!disclaimerAccepted">
+    <div class="overlay">
+      <div class="modal disclaimer-modal">
+        <h1 class="welcome">Welcome to Bet<span class="bolt">⚡</span>WithFriends</h1>
+        <h2>Before you continue</h2>
+        <p>
+          <strong>Bet only with people you personally know and trust.</strong>
+          Every pool is run by its admin — a real person who receives all bets and pays the
+          winners by hand. BetWithFriends cannot recover funds, reverse payments, or force an
+          admin to pay out. Only place a bet if you trust the pool's admin not to falsify the
+          result or otherwise cheat you.
+        </p>
+        <p>
+          Gambling may be restricted or illegal where you live.
+          <strong>You are solely responsible for complying with your local laws.</strong>
+          BetWithFriends is an open-source tool and takes no responsibility for pools created
+          or joined in places where gambling is not allowed.
+        </p>
+        <p>
+          <strong>You must be of legal gambling age</strong> in your jurisdiction to use this
+          site. BetWithFriends has no way to verify anyone's age and accepts no responsibility
+          for pools created by minors, bets placed by minors, or pool links shared with minors —
+          preventing that is entirely the responsibility of the people creating and sharing pools.
+        </p>
+        <button class="btn primary block" @click="acceptDisclaimer()">I understand &amp; agree</button>
+      </div>
+    </div>
+  </template>
+
+  <div class="shell" x-show="disclaimerAccepted" x-cloak>
+
+    <!-- ===================== Top bar ===================== -->
+    <header class="topbar">
+      <a class="brand" href="#/">Bet<span class="bolt">⚡</span>WithFriends</a>
+      <div>
+        <template x-if="!session">
+          <button class="btn small" @click="openLogin('general')">Log in</button>
+        </template>
+        <template x-if="session">
+          <div style="position: relative">
+            <button class="btn small" @click="accountMenuOpen = !accountMenuOpen">
+              <span x-text="myProfile?.name ?? myNpub().slice(0, 12) + '…'"></span> ▾
+            </button>
+            <div x-show="accountMenuOpen" @click.outside="accountMenuOpen = false" x-cloak
+                 class="card" style="position: absolute; right: 0; top: 42px; z-index: 40; width: 270px; margin: 0">
+              <p class="hint" style="margin-top: 0">Public key</p>
+              <div class="mono" x-text="myNpub()"></div>
+              <div class="row-actions">
+                <button class="btn small danger" @click="doLogout()">Log out</button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </header>
+
+    <!-- ===================== Home ===================== -->
+    <template x-if="route === 'home'">
+      <main>
+        <section class="hero">
+          <h1>Friendly bets,<br />settled with <span class="bolt">⚡</span> lightning</h1>
+          <p class="tagline">
+            Create a private betting pool, share one link with your friends, and let them
+            back their pick with bitcoin lightning zaps. No server, no signup — everything
+            lives encrypted on nostr.
+          </p>
+          <a class="btn primary" href="#/create">Create a betting pool</a>
+          <div class="hero-steps">
+            <div class="hero-step"><span class="num">1</span>
+              <span><strong>Create a pool</strong> — a question with 2+ options, e.g. “Who wins the derby?”</span></div>
+            <div class="hero-step"><span class="num">2</span>
+              <span><strong>Share the link</strong> — only people with the link can read the pool; it’s end-to-end encrypted.</span></div>
+            <div class="hero-step"><span class="num">3</span>
+              <span><strong>Friends zap their pick</strong> — bets are lightning payments straight to the admin.</span></div>
+            <div class="hero-step"><span class="num">4</span>
+              <span><strong>Declare the winner</strong> — the admin pays winners proportionally to their stake.</span></div>
+          </div>
+        </section>
+        <div class="notice">
+          Pools are held together by trust: the admin personally receives all bets and pays
+          the winners. Only bet with an admin you know.
+        </div>
+      </main>
+    </template>
+
+    <!-- ===================== Create ===================== -->
+    <template x-if="route === 'create'">
+      <main>
+        <h1 class="pool-title">Create a betting pool</h1>
+
+        <template x-if="!session">
+          <div class="card">
+            <h2>First, log in</h2>
+            <p class="dim">The pool is published from your nostr identity, and bets are zapped to your lightning wallet.</p>
+            <button class="btn primary" @click="openLogin('general')">Log in / create a profile</button>
+          </div>
+        </template>
+
+        <template x-if="session">
+          <form class="card" @submit.prevent="createPool()">
+            <!-- wallet check -->
+            <template x-if="wallet.state === 'checking'">
+              <div class="notice"><span class="spinner"></span> Checking your lightning wallet…</div>
+            </template>
+            <template x-if="wallet.state === 'ok'">
+              <div class="notice"><span class="ok">✓</span> Bets will be zapped to <strong x-text="wallet.lud16"></strong></div>
+            </template>
+            <template x-if="wallet.state === 'missing' || wallet.state === 'bad'">
+              <div class="notice warn">
+                <template x-if="wallet.state === 'missing'">
+                  <p style="margin-top:0">Your nostr profile has no lightning address, so friends can’t zap you bets. Add one to continue:</p>
+                </template>
+                <template x-if="wallet.state === 'bad'">
+                  <p style="margin-top:0">Your lightning address <strong x-text="wallet.lud16"></strong> can’t host this pool: <span x-text="wallet.reason"></span>. Set a different one (e.g. Wallet of Satoshi, Alby, Coinos):</p>
+                </template>
+                <input type="text" x-model="wallet.newLud16" placeholder="you@walletofsatoshi.com" />
+                <p class="error" x-show="wallet.saveError" x-text="wallet.saveError"></p>
+                <div class="row-actions">
+                  <button type="button" class="btn small primary" :disabled="wallet.saving" @click="saveWalletAddress()">
+                    <span x-show="wallet.saving" class="spinner"></span> Save to my profile
+                  </button>
+                  <button type="button" class="btn small" @click="checkWallet()">Re-check</button>
+                </div>
+              </div>
+            </template>
+
+            <label>Title *</label>
+            <input type="text" x-model="form.title" required maxlength="120" placeholder="Who wins the Champions League final?" />
+
+            <label>Description <span class="dim">(optional)</span></label>
+            <textarea x-model="form.description" rows="3" placeholder="Details, rules, kickoff time…"></textarea>
+
+            <label>Image URL <span class="dim">(optional)</span></label>
+            <input type="url" x-model="form.imageUrl" @blur="validateImageUrl()"
+                   @keydown.enter.prevent="validateImageUrl()"
+                   @paste="setTimeout(() => validateImageUrl(), 0)"
+                   placeholder="https://… (shown above the title)" />
+            <p class="error" x-show="form.imageUrlError" x-text="form.imageUrlError"></p>
+            <template x-if="form.imageUrlValidated">
+              <img class="pool-image" :src="form.imageUrlValidated" alt="Pool image preview" />
+            </template>
+
+            <label>Background <span class="dim">(optional)</span></label>
+            <div class="bg-picker">
+              <button type="button" class="bg-tile none" :class="{ selected: form.backgroundId === '' }"
+                      @click="form.backgroundId = ''">None</button>
+              <template x-for="bg in backgrounds()" :key="bg.id">
+                <button type="button" class="bg-tile" :class="{ selected: form.backgroundId === bg.id }"
+                        :style="'background-image:' + backgroundPreview(bg.id)" @click="form.backgroundId = bg.id">
+                  <span class="tag" x-text="bg.label"></span>
+                </button>
+              </template>
+              <button type="button" class="bg-tile none" :class="{ selected: form.backgroundId === 'custom' }"
+                      @click="form.backgroundId = 'custom'">Custom URL…</button>
+            </div>
+            <template x-if="form.backgroundId === 'custom'">
+              <div>
+                <input type="url" x-model="form.customBackgroundUrl" @blur="validateCustomBackground()"
+                       @keydown.enter.prevent="validateCustomBackground()"
+                       @paste="setTimeout(() => validateCustomBackground(), 0)"
+                       placeholder="https://…/background.png" style="margin-top: 10px" />
+                <p class="hint">Dark backgrounds work best — the text on the page is light.</p>
+                <p class="error" x-show="form.customBgError" x-text="form.customBgError"></p>
+              </div>
+            </template>
+
+            <label>Options * <span class="dim">(at least 2)</span></label>
+            <template x-for="(option, i) in form.options" :key="i">
+              <div class="option-edit">
+                <div class="head">
+                  <span x-text="'Option ' + (i + 1)"></span>
+                  <button type="button" class="btn small danger" x-show="form.options.length > 2" @click="removeOption(i)">Remove</button>
+                </div>
+                <input type="text" x-model="option.title" :required="i < 2" maxlength="80" :placeholder="optionPlaceholder(i)" />
+                <input type="text" x-model="option.description" maxlength="160" placeholder="Optional description" style="margin-top: 8px" />
+              </div>
+            </template>
+            <button type="button" class="btn small" @click="addOption()">+ Add option</button>
+
+            <div class="field-grid">
+              <div>
+                <label>Admin fee (%)</label>
+                <input type="number" x-model.number="form.adminFeePct" min="0" max="100" step="0.5" required />
+              </div>
+              <div>
+                <label>Max number of bets</label>
+                <input type="number" x-model.number="form.maxBets" min="1" step="1" required />
+              </div>
+              <div>
+                <label>Max bet (sats)</label>
+                <input type="number" x-model.number="form.maxBetSats" min="1" step="1" required />
+              </div>
+              <div>
+                <label>Deadline <span class="dim">(optional)</span></label>
+                <input type="datetime-local" x-model="form.deadlineLocal" />
+              </div>
+            </div>
+            <div class="notice">
+              <strong>Why an admin fee?</strong> When you pay the winners you also pay lightning
+              network fees out of your own pocket. With a 0% fee you would pay out everything
+              you received and <strong>lose money on fees</strong> — keep a small fee to cover them.
+            </div>
+
+            <p><button type="button" class="btn small" @click="form.showAdvanced = !form.showAdvanced"
+                       x-text="form.showAdvanced ? 'Hide advanced' : 'Advanced: relays'"></button></p>
+            <template x-if="form.showAdvanced">
+              <div>
+                <label>Nostr relays <span class="dim">(one per line — where the pool is published)</span></label>
+                <textarea x-model="form.relaysText" rows="5" spellcheck="false"></textarea>
+              </div>
+            </template>
+
+            <div class="notice">
+              Heads-up: limits (max bets, max amount, deadline) are enforced by the app’s UI,
+              not by the network. A technically savvy friend could still zap outside the rules —
+              as admin you can simply refund and ignore such bets.
+            </div>
+
+            <p class="error" x-show="createError" x-text="createError"></p>
+            <button type="submit" class="btn primary block" :disabled="creating || wallet.state !== 'ok'">
+              <span x-show="creating" class="spinner"></span>
+              <span x-text="creating ? 'Publishing…' : 'Create pool'"></span>
+            </button>
+            <p class="hint center" x-show="wallet.state !== 'ok'">Sort out your lightning wallet above to enable this.</p>
+          </form>
+        </template>
+      </main>
+    </template>
+
+    <!-- ===================== Pool ===================== -->
+    <template x-if="route === 'pool'">
+      <main>
+        <template x-if="poolLoading">
+          <div class="card center"><span class="spinner"></span> Loading pool from relays…</div>
+        </template>
+        <template x-if="poolError">
+          <div class="card"><p class="error" x-text="poolError" style="margin: 0"></p></div>
+        </template>
+
+        <template x-if="pool">
+          <div>
+            <template x-if="pool.content.imageUrl">
+              <img class="pool-image" :src="pool.content.imageUrl" alt="" />
+            </template>
+            <div class="pool-title-row">
+              <template x-if="adminProfile?.picture">
+                <a class="admin-avatar" :href="adminNjumpUrl()" target="_blank" rel="noopener noreferrer"
+                   :title="'Admin: ' + adminName()">
+                  <img :src="adminProfile.picture" alt="Admin profile picture" />
+                </a>
+              </template>
+              <h1 class="pool-title" x-text="pool.content.title"></h1>
+              <button class="btn small share-btn" @click="sharePool()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 3 v12" /><path d="M8 7 l4 -4 4 4" />
+                  <path d="M5 12 v7 a1.5 1.5 0 0 0 1.5 1.5 h11 a1.5 1.5 0 0 0 1.5 -1.5 v-7" />
+                </svg>
+                <span x-text="copied === 'share' ? 'Copied ✓' : 'Share'"></span>
+              </button>
+            </div>
+            <p class="pool-sub">
+              Pool by <a class="admin-link" :href="adminNjumpUrl()" target="_blank" rel="noopener noreferrer"><strong x-text="adminName()"></strong></a>
+              <template x-if="isAdmin"><span class="ok"> (you)</span></template>
+              · created <span x-text="fmtTime(pool.createdAt)"></span>
+            </p>
+            <template x-if="pool.content.description">
+              <p class="pool-desc" x-text="pool.content.description"></p>
+            </template>
+
+            <div class="statusline">
+              <span class="chip accent">Pot: <span x-text="fmtSats(potSats)"></span> sats</span>
+              <span class="chip"><span x-text="bets.length"></span>/<span x-text="pool.content.maxBets"></span> bets</span>
+              <span class="chip">Max bet: <span x-text="fmtSats(pool.content.maxBetSats)"></span> sats</span>
+              <span class="chip">Admin fee: <span x-text="pool.content.adminFeePct"></span>%</span>
+              <template x-if="blockReason">
+                <span class="chip" :class="status.winnerOptionId ? 'winner' : 'closed'" x-text="blockReason"></span>
+              </template>
+            </div>
+            <template x-if="pool.content.deadline !== undefined && bettingOpen">
+              <div class="countdown-row">
+                <span class="chip accent countdown">⏳ <span x-text="countdown"></span></span>
+              </div>
+            </template>
+
+            <!-- options -->
+            <template x-for="option in pool.content.options" :key="option.id">
+              <button class="option" :class="{ winner: status.winnerOptionId === option.id }"
+                      :disabled="!bettingOpen" @click="clickOption(option.id)">
+                <div class="row">
+                  <span class="title">
+                    <template x-if="status.winnerOptionId === option.id"><span>🏆 </span></template>
+                    <span x-text="option.title"></span>
+                  </span>
+                  <span class="total"><span x-text="fmtSats(optionTotal(option.id))"></span> sats</span>
+                </div>
+                <template x-if="option.description">
+                  <div class="desc" x-text="option.description"></div>
+                </template>
+                <div class="bar">
+                  <div :style="'width:' + (potSats ? Math.round(optionTotal(option.id) / potSats * 100) : 0) + '%'"></div>
+                </div>
+                <template x-if="!isAdmin && optionBets(option.id).length">
+                  <div class="bettors">
+                    <template x-for="b in optionBets(option.id)" :key="b.receiptId">
+                      <span><span x-text="displayName(b.bettorPubkey)"></span> · <span x-text="fmtSats(b.amountSats)"></span> ⚡ &nbsp;</span>
+                    </template>
+                  </div>
+                </template>
+                <!-- the admin sees each zap on its own line, with date and decrypted reward address -->
+                <template x-if="isAdmin && optionBets(option.id).length">
+                  <div>
+                    <template x-for="b in optionBets(option.id)" :key="b.receiptId">
+                      <div class="bet-row" x-init="decryptRewardAddress(b)">
+                        <div class="who">
+                          <strong x-text="displayName(b.bettorPubkey)"></strong>
+                          <div class="sub">
+                            <span x-text="fmtTime(b.createdAt)"></span> ·
+                            <span x-text="decryptedAddresses[b.receiptId] ?? '…'"></span>
+                          </div>
+                        </div>
+                        <span class="amt"><span x-text="fmtSats(b.amountSats)"></span> ⚡</span>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+              </button>
+            </template>
+            <p class="tap-hint" x-show="bettingOpen">Tap an option to place your bet ⚡</p>
+
+            <!-- admin panel -->
+            <template x-if="isAdmin">
+              <div class="card">
+                <h2>Admin</h2>
+                <template x-if="!status.winnerOptionId && !status.cancelled">
+                  <div>
+                    <div class="row-actions" style="margin-top: 0">
+                      <button class="btn" x-show="!status.closed" :disabled="adminBusy" @click="closeBets()">Close betting</button>
+                      <button class="btn danger" x-show="bets.length > 0" :disabled="adminBusy" @click="cancelPool()">Cancel pool &amp; refund</button>
+                    </div>
+                    <label>Declare the winning option</label>
+                    <select x-model="winnerPick">
+                      <option value="" disabled>Select the winner…</option>
+                      <template x-for="option in pool.content.options" :key="option.id">
+                        <option :value="option.id" :disabled="optionTotal(option.id) === 0"
+                                x-text="option.title + (optionTotal(option.id) === 0 ? ' — no bets' : '')"></option>
+                      </template>
+                    </select>
+                    <p class="hint">Options nobody bet on can't win — there would be no one to pay. To end the pool without a winner, cancel and refund instead.</p>
+                    <div class="row-actions">
+                      <button class="btn primary" :disabled="!winnerPick || adminBusy" @click="declareWinner()">
+                        <span x-show="adminBusy" class="spinner"></span> Declare winner
+                      </button>
+                    </div>
+                  </div>
+                </template>
+
+                <template x-if="status.winnerOptionId || status.cancelled">
+                  <div>
+                    <h3 x-text="status.cancelled ? 'Refunds — pool cancelled' : 'Payouts — ' + optionTitle(status.winnerOptionId) + ' won'"></h3>
+                    <template x-if="payouts.length === 0">
+                      <p class="dim">There are no bets to pay out.</p>
+                    </template>
+                    <template x-for="p in payouts" :key="p.bet.receiptId">
+                      <div class="payout-row" :class="{ paid: p.paid }">
+                        <span class="who" x-text="displayName(p.bet.bettorPubkey)"></span>
+                        <span class="amt"><span x-text="fmtSats(p.amountSats)"></span> sats</span>
+                        <button class="btn small primary" x-show="!p.paid" @click="openPayout(p)">Pay</button>
+                        <button class="btn small" @click="togglePaid(p)" x-text="p.paid ? 'Unmark' : 'Mark paid'"></button>
+                      </div>
+                    </template>
+                    <p class="hint" x-show="payouts.length">
+                      Your fee + rounding: <span x-text="fmtSats(adminFeeSats)"></span> sats of the
+                      <span x-text="fmtSats(potSats)"></span> sats pot. Remember: lightning fees for
+                      each payout come out of your pocket.
+                    </p>
+                  </div>
+                </template>
+                <p class="error" x-show="adminError" x-text="adminError"></p>
+              </div>
+            </template>
+
+            <!-- comments: written by the admin only; hidden from others while empty -->
+            <template x-if="isAdmin || comments.length > 0">
+              <div class="card">
+                <h2>Admin Comments</h2>
+                <template x-if="comments.length === 0"><p class="dim">No comments yet.</p></template>
+                <template x-for="c in comments" :key="c.id">
+                  <div class="comment">
+                    <div class="body">
+                      <div class="meta" x-text="fmtTime(c.createdAt)"></div>
+                      <div class="text" x-text="c.text"></div>
+                    </div>
+                  </div>
+                </template>
+                <template x-if="isAdmin">
+                  <form class="comment-form" @submit.prevent="postComment()">
+                    <input type="text" x-model="commentText" maxlength="500" placeholder="Write a comment…" />
+                    <button type="submit" class="btn small primary" :disabled="postingComment || !commentText.trim()">Post</button>
+                  </form>
+                </template>
+              </div>
+            </template>
+
+            <div class="notice">
+              🔒 The pool’s details, your pick and your reward address are encrypted — only people
+              with this link can read them. Note that the <strong>amounts and timing</strong> of
+              zaps are public on the nostr network, and this pool exists only as long as its
+              relays keep the events.
+            </div>
+          </div>
+        </template>
+      </main>
+    </template>
+
+    <footer class="site">
+      BetWithFriends · bets live on nostr relays, payments on the bitcoin lightning network ·
+      bet responsibly, only with people you trust ·
+      <a href="#" @click.prevent="disclaimerAccepted = false">Disclaimer</a> ·
+      <a href="https://github.com/oren-z0/betwithfriends" target="_blank" rel="noopener noreferrer">Source code</a>
+    </footer>
+  </div>
+
+  <!-- ===================== Login modal ===================== -->
+  <template x-if="login.open">
+    <div class="overlay" @click.self="login.mode !== 'backup' && (login.open = false)">
+      <div class="modal">
+        <template x-if="login.mode === 'menu'">
+          <div>
+            <h2 x-text="login.context === 'bet' ? 'Log in to bet' : 'Log in to nostr'"></h2>
+            <div class="choice-list">
+              <button class="btn" :disabled="login.busy || !hasExtension()" @click="doExtensionLogin()"
+                      x-text="hasExtension() ? '🧩 Use my nostr extension' : '🧩 Use my nostr extension (not found)'">
+              </button>
+              <button class="btn" @click="login.mode = 'nsec'">🔑 Enter my secret key (nsec)</button>
+              <button class="btn" @click="login.mode = 'new'">✨ Create a new nostr profile</button>
+            </div>
+            <p class="error" x-show="login.error" x-text="login.error"></p>
+            <div class="close-row"><button class="btn small" @click="login.open = false">Cancel</button></div>
+          </div>
+        </template>
+
+        <template x-if="login.mode === 'nsec'">
+          <div>
+            <h2>Enter your secret key</h2>
+            <p class="hint">Your nsec is stored only in this browser (localStorage) and never leaves your device.</p>
+            <input type="password" x-model="login.nsecInput" placeholder="nsec1…" autocomplete="off" />
+            <p class="error" x-show="login.error" x-text="login.error"></p>
+            <div class="row-actions">
+              <button class="btn primary" @click="doNsecLogin()">Log in</button>
+              <button class="btn" @click="login.mode = 'menu'">Back</button>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="login.mode === 'new'">
+          <div>
+            <h2>Create a nostr profile</h2>
+            <p class="hint">This makes a brand-new identity for you. You'll get a secret key (nsec) — it's the only way back into this account.</p>
+            <label>Display name *</label>
+            <input type="text" x-model="login.newName" required maxlength="40" placeholder="e.g. Dana" />
+            <label>Lightning address <span class="dim">(required for creating betting pools)</span></label>
+            <input type="text" x-model="login.newLud16" placeholder="you@walletofsatoshi.com" autocomplete="off" />
+            <p class="error" x-show="login.error" x-text="login.error"></p>
+            <div class="row-actions">
+              <button class="btn primary" @click="doCreateProfile()">Create profile</button>
+              <button class="btn" @click="login.mode = 'menu'">Back</button>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="login.mode === 'backup'">
+          <div>
+            <h2>⚠️ Back up your secret key</h2>
+            <p class="hint">
+              This nsec <strong>is</strong> your account. It's saved in this browser, but if you clear
+              your browser data or switch devices without it, <strong>you lose access forever</strong> —
+              there is no password reset. Copy it somewhere safe now.
+            </p>
+            <div class="mono" x-text="login.backupNsec"></div>
+            <button class="btn small" @click="copy(login.backupNsec, 'backup')"
+                    x-text="copied === 'backup' ? 'Copied ✓' : 'Copy nsec'"></button>
+            <p style="margin-top: 14px">
+              <label style="display: flex; gap: 8px; align-items: center; margin: 0; font-size: 0.9rem">
+                <input type="checkbox" x-model="login.backupConfirmed" style="width: auto; min-height: 0" />
+                I saved my nsec somewhere safe
+              </label>
+            </p>
+            <button class="btn primary block" :disabled="!login.backupConfirmed" @click="finishBackup()">Continue</button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <!-- ===================== Bet modal ===================== -->
+  <template x-if="bet.open">
+    <div class="overlay" @click.self="bet.open = false">
+      <div class="modal">
+        <template x-if="bet.state === 'creating'">
+          <div class="center">
+            <h2>Creating an anonymous nostr profile…</h2>
+            <p class="hint">No account needed — we're minting a one-off anonymous identity just for this zap.</p>
+            <p x-show="!bet.error"><span class="spinner"></span></p>
+            <p class="error" x-show="bet.error" x-text="bet.error"></p>
+            <div class="close-row"><button class="btn small" @click="bet.open = false">Cancel</button></div>
+          </div>
+        </template>
+
+        <template x-if="bet.state === 'form'">
+          <div>
+            <h2>Bet on “<span x-text="optionTitle(bet.optionId)"></span>”</h2>
+            <p class="pool-sub" style="margin-top: -6px">
+              Zapping as <strong x-text="zapperName"></strong>
+              <template x-if="!session">
+                <button class="btn small" style="margin-left: 8px" @click="switchToLogin()">Log in instead</button>
+              </template>
+            </p>
+            <label>Amount (sats) *</label>
+            <input type="number" x-model="bet.amount" min="1" :max="pool?.content.maxBetSats" inputmode="numeric"
+                   :placeholder="'up to ' + fmtSats(pool?.content.maxBetSats ?? 0)" />
+            <label>Reward address *</label>
+            <input type="text" x-model="bet.rewardAddress" maxlength="63" placeholder="you@walletofsatoshi.com" autocomplete="off" />
+            <p class="hint">
+              If you win, the admin pays your winnings to this lightning address. It is encrypted
+              so only the admin can see it.
+            </p>
+            <p class="error" x-show="bet.error" x-text="bet.error"></p>
+            <button class="btn primary block" :disabled="bet.busy" @click="submitBet()">
+              <span x-show="bet.busy" class="spinner"></span>
+              <span x-text="bet.busy ? 'Preparing invoice…' : 'Get invoice ⚡'"></span>
+            </button>
+            <div class="close-row"><button class="btn small" @click="bet.open = false">Cancel</button></div>
+          </div>
+        </template>
+
+        <template x-if="bet.state === 'invoice'">
+          <div>
+            <h2>Pay to place your bet</h2>
+            <div class="qr-wrap"><img :src="bet.qr" alt="Lightning invoice QR" /></div>
+            <p class="hint center">Scan with a lightning wallet, or copy the invoice below.</p>
+            <div class="mono" x-text="bet.invoice"></div>
+            <div class="row-actions">
+              <button class="btn primary" @click="copy(bet.invoice, 'invoice')"
+                      x-text="copied === 'invoice' ? 'Copied ✓' : 'Copy invoice'"></button>
+              <a class="btn" :href="'lightning:' + bet.invoice">Open in wallet</a>
+            </div>
+            <p class="hint center"><span class="spinner"></span> Waiting for your payment to be confirmed…</p>
+            <div class="close-row"><button class="btn small" @click="bet.open = false">Close</button></div>
+          </div>
+        </template>
+
+        <template x-if="bet.state === 'paid'">
+          <div class="paid-check">
+            <div class="mark">✅</div>
+            <h2>Your bet is in!</h2>
+            <p class="dim">
+              <span x-text="fmtSats(Math.floor(Number(bet.amount)))"></span> sats on
+              “<span x-text="optionTitle(bet.optionId)"></span>”. Good luck! 🍀
+            </p>
+            <button class="btn primary" @click="bet.open = false">Done</button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <!-- ===================== Payout modal ===================== -->
+  <template x-if="payoutModal.open">
+    <div class="overlay" @click.self="payoutModal.open = false">
+      <div class="modal">
+        <h2>Pay <span x-text="payoutModal.payout ? displayName(payoutModal.payout.bet.bettorPubkey) : ''"></span></h2>
+        <p class="dim" style="margin-top: 0">
+          <span x-text="payoutModal.payout ? fmtSats(payoutModal.payout.amountSats) : ''"></span> sats
+          <template x-if="payoutModal.address"><span> → <strong x-text="payoutModal.address"></strong></span></template>
+        </p>
+        <template x-if="payoutModal.busy">
+          <p class="center"><span class="spinner"></span> Fetching invoice from the winner's wallet…</p>
+        </template>
+        <p class="error" x-show="payoutModal.error" x-text="payoutModal.error"></p>
+        <template x-if="payoutModal.invoice">
+          <div>
+            <div class="qr-wrap"><img :src="payoutModal.qr" alt="Payout invoice QR" /></div>
+            <p class="hint center">Scan with your wallet, or copy the invoice.</p>
+            <div class="mono" x-text="payoutModal.invoice"></div>
+            <div class="row-actions">
+              <button class="btn primary" @click="copy(payoutModal.invoice, 'payout')"
+                      x-text="copied === 'payout' ? 'Copied ✓' : 'Copy invoice'"></button>
+              <a class="btn" :href="'lightning:' + payoutModal.invoice">Open in wallet</a>
+              <button class="btn" @click="payoutModal.payout && togglePaid(payoutModal.payout); payoutModal.open = false">
+                Mark paid &amp; close
+              </button>
+            </div>
+          </div>
+        </template>
+        <div class="close-row"><button class="btn small" @click="payoutModal.open = false">Close</button></div>
+      </div>
+    </div>
+  </template>
+
+</body>
+</html>

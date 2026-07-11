@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <pattern id="p" width="200" height="200" patternUnits="userSpaceOnUse">
+      <g opacity="0.35">
+    <path d="M50 66 C38 56 32 50 32 43 a9 9 0 0 1 18 -3 a9 9 0 0 1 18 3 c0 7 -6 13 -18 23 Z" fill="#ffb3bd"/></g>
+      <g opacity="0.35" transform="translate(100 100)">
+    <path d="M50 66 C38 56 32 50 32 43 a9 9 0 0 1 18 -3 a9 9 0 0 1 18 3 c0 7 -6 13 -18 23 Z" fill="#ffb3bd"/></g>
+    </pattern>
+  </defs>
+  <rect width="1600" height="1600" fill="#7a1f2b"/>
+  <rect width="1600" height="1600" fill="url(#p)"/>
+</svg>
