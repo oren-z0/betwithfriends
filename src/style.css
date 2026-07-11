@@ -371,12 +371,10 @@ label {
   color: var(--accent);
 }
 
-/* The countdown lives on its own row: its text width changes every second,
-   which would shuffle chips between rows inside the wrapping statusline. */
-.countdown-row {
-  margin: -4px 0 12px;
-}
-
+/* The countdown's text width changes every second; keeping it last in its
+   wrapping row (after admin fee / status) means only its own position can
+   shift, never the chips before it. tabular-nums also stops sub-pixel jitter
+   as digits change. */
 .chip.countdown {
   display: inline-block;
   font-variant-numeric: tabular-nums;

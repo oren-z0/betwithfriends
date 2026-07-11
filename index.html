@@ -302,16 +302,16 @@
               <span class="chip accent">Pot: <span x-text="fmtSats(potSats)"></span> sats</span>
               <span class="chip"><span x-text="bets.length"></span>/<span x-text="pool.content.maxBets"></span> bets</span>
               <span class="chip">Max bet: <span x-text="fmtSats(pool.content.maxBetSats)"></span> sats</span>
+            </div>
+            <div class="statusline">
               <span class="chip">Admin fee: <span x-text="pool.content.adminFeePct"></span>%</span>
               <template x-if="blockReason">
                 <span class="chip" :class="status.winnerOptionId ? 'winner' : 'closed'" x-text="blockReason"></span>
               </template>
-            </div>
-            <template x-if="pool.content.deadline !== undefined && bettingOpen">
-              <div class="countdown-row">
+              <template x-if="pool.content.deadline !== undefined && bettingOpen">
                 <span class="chip accent countdown">⏳ <span x-text="countdown"></span></span>
-              </div>
-            </template>
+              </template>
+            </div>
 
             <!-- options -->
             <template x-for="option in pool.content.options" :key="option.id">
