@@ -1,4 +1,5 @@
 import type { Event } from 'nostr-tools/core'
+import type { Filter } from 'nostr-tools/filter'
 import * as nip19 from 'nostr-tools/nip19'
 import { generateAesKey } from './crypto/aes'
 import {
@@ -190,7 +191,18 @@ export function createApp() {
       this.session = loadSession()
       if (this.session) void this.loadMyProfile()
       window.addEventListener('hashchange', () => this.handleRoute())
+      // Mobile browsers can suspend a backgrounded tab's websocket (e.g. while
+      // the user is away paying an invoice in their wallet app), so the live
+      // subscription can silently miss events. Catch up whenever the tab
+      // becomes visible again.
+      document.addEventListener('visibilitychange', () => this.handleVisible())
+      window.addEventListener('pageshow', () => this.handleVisible())
       this.handleRoute()
+    },
+
+    handleVisible() {
+      if (document.visibilityState !== 'visible') return
+      if (this.route === 'pool' && this.pool) void this.refreshPoolEvents()
     },
 
     handleRoute() {
@@ -568,6 +580,7 @@ export function createApp() {
       this.pendingBetOption = ''
       this.pendingBetDraft = null
       this.decryptedAddresses = {}
+      this.refreshing = false
     },
 
     async loadPool() {
@@ -604,28 +617,56 @@ export function createApp() {
       }
     },
 
+    /** Comments and admin actions only count when signed by the admin, so ask the
+     * relays for the admin's alone; zap receipts come from the LNURL provider
+     * and can't be author-filtered. Shared by the live subscription and the
+     * catch-up refresh so both query exactly the same events. */
+    poolEventFilters(pool: Pool): Filter[] {
+      return [
+        { kinds: [KIND_ZAP_RECEIPT], '#e': [pool.id] },
+        { kinds: [KIND_ADMIN_ACTION, KIND_COMMENT], authors: [pool.adminPubkey], '#e': [pool.id] },
+      ]
+    },
+
     subscribePoolEvents() {
       if (!this.pool) return
-      const poolObj = this.pool
       const onevent = (event: Event) => {
         void this.handlePoolEvent(event)
       }
-      // Comments and admin actions only count when signed by the admin, so ask
-      // the relays for the admin's alone; zap receipts come from the LNURL
-      // provider and can't be author-filtered.
-      const subs = [
-        relayPool.subscribeMany(
-          poolObj.relays,
-          { kinds: [KIND_ZAP_RECEIPT], '#e': [poolObj.id] },
-          { onevent },
-        ),
-        relayPool.subscribeMany(
-          poolObj.relays,
-          { kinds: [KIND_ADMIN_ACTION, KIND_COMMENT], authors: [poolObj.adminPubkey], '#e': [poolObj.id] },
-          { onevent },
-        ),
-      ]
+      const subs = this.poolEventFilters(this.pool).map((filter) =>
+        relayPool.subscribeMany(this.pool!.relays, filter, { onevent }),
+      )
       this.sub = { close: () => subs.forEach((s) => s.close()) }
+    },
+
+    refreshing: false,
+
+    /**
+     * Re-fetches the pool's events from scratch and restarts the live
+     * subscription. Mobile browsers can suspend a backgrounded tab's
+     * websocket (e.g. while the user pays an invoice in their wallet app),
+     * silently missing events published in the meantime — this catches up.
+     * Safe to call repeatedly: handlePoolEvent already dedupes every kind.
+     */
+    async refreshPoolEvents() {
+      if (!this.pool || this.refreshing) return
+      this.refreshing = true
+      try {
+        const pool = this.pool
+        const results = await Promise.all(
+          this.poolEventFilters(pool).map((filter) =>
+            relayPool.querySync(pool.relays, filter, { maxWait: 6000 }).catch(() => []),
+          ),
+        )
+        for (const events of results) {
+          for (const event of events) await this.handlePoolEvent(event)
+        }
+        // The live subscription's websocket may also be dead after backgrounding.
+        this.sub?.close()
+        this.subscribePoolEvents()
+      } finally {
+        this.refreshing = false
+      }
     },
 
     async handlePoolEvent(event: Event) {
