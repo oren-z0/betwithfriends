@@ -204,6 +204,13 @@ label {
   padding: 40px 0 8px;
 }
 
+.hero-icon {
+  width: 88px;
+  height: 88px;
+  border-radius: 22px;
+  margin-bottom: 8px;
+}
+
 .hero h1 {
   font-size: 2rem;
   line-height: 1.15;
