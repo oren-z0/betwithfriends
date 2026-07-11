@@ -42,6 +42,25 @@ body {
   min-height: 100dvh;
 }
 
+/*
+ * Fixed background layer, separate from the scrolling content.
+ * Sized to 100lvh ("large viewport height" — the viewport with the mobile
+ * browser's address bar hidden) rather than 100vh/dvh/inset:0. Those track
+ * the *current* viewport, which grows as the address bar collapses during a
+ * scroll — recalculating background-size:cover mid-scroll and making the
+ * image visibly jump/grow. lvh is fixed to the largest, stable size, so nothing
+ * resizes as the browser chrome comes and goes.
+ */
+.page-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh; /* fallback for browsers without lvh support */
+  height: 100lvh;
+  z-index: -1;
+}
+
 .shell {
   max-width: 640px;
   margin: 0 auto;

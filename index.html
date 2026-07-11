@@ -23,7 +23,8 @@
   <meta name="twitter:image" content="https://betwithfriends.niot.space/og-image.png" />
   <script type="module" src="/src/main.ts"></script>
 </head>
-<body x-data="app" :style="route === 'pool' ? poolBackgroundStyle() : route === 'create' ? createBackgroundStyle() : ''" class="app-bg">
+<body x-data="app" class="app-bg">
+  <div class="page-bg" :style="route === 'pool' ? poolBackgroundStyle() : route === 'create' ? createBackgroundStyle() : ''"></div>
 
   <!-- ===================== Disclaimer gate ===================== -->
   <template x-if="!disclaimerAccepted">

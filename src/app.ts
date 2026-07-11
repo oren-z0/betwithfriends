@@ -1078,7 +1078,12 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-/** Page background with a dark overlay baked in, so light text stays readable on any image. */
+/**
+ * Page background with a dark overlay baked in, so light text stays readable
+ * on any image. Rendered on the fixed .page-bg layer (see style.css) rather
+ * than via background-attachment: fixed, which resizes visibly as a mobile
+ * browser's address bar collapses mid-scroll.
+ */
 function backgroundStyle(url: string): string {
   return (
     `background-image: linear-gradient(rgba(8, 10, 16, 0.45), rgba(8, 10, 16, 0.45)), url("${url.replaceAll('"', '%22')}"); ` +
