@@ -858,6 +858,12 @@ export function createApp() {
       return new Intl.NumberFormat('en-US').format(n)
     },
 
+    /** Build version shown in the footer: the last commit's date and short hash (see vite.config.ts). */
+    appVersion(): string {
+      if (!__GIT_DATE__ || !__GIT_HASH__) return ''
+      return `Version: ${__GIT_DATE__} ${__GIT_HASH__}`
+    },
+
     fmtTime(unix: number): string {
       return new Date(unix * 1000).toLocaleString('en-US', {
         month: 'short',
