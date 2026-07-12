@@ -2,7 +2,7 @@ import type { Event } from 'nostr-tools/core'
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 import { describe, expect, it } from 'vitest'
 import { generateAesKey } from '../crypto/aes'
-import type { PoolContent } from '../types'
+import { BWF_VERSION_TAG, type PoolContent } from '../types'
 import {
   buildAdminActionTemplate,
   buildCommentTemplate,
@@ -177,5 +177,19 @@ describe('comments', () => {
     const comment = await parseComment(event, key)
     expect(comment?.text).toBe('good luck! 🍀')
     expect(await parseComment(event, generateAesKey())).toBeNull()
+  })
+})
+
+describe('bwf-version tag', () => {
+  it('is attached to pool, admin action, and comment events', async () => {
+    const key = generateAesKey()
+    const poolTemplate = await buildPoolTemplate(content, key)
+    expect(poolTemplate.tags).toContainEqual(BWF_VERSION_TAG)
+
+    const actionTemplate = await buildAdminActionTemplate('p'.repeat(64), { action: 'close' }, key)
+    expect(actionTemplate.tags).toContainEqual(BWF_VERSION_TAG)
+
+    const commentTemplate = await buildCommentTemplate('p'.repeat(64), 'hi', key)
+    expect(commentTemplate.tags).toContainEqual(BWF_VERSION_TAG)
   })
 })

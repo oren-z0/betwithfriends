@@ -2,7 +2,7 @@ import type { Event, EventTemplate } from 'nostr-tools/core'
 import * as nip19 from 'nostr-tools/nip19'
 import { aesDecrypt, aesEncrypt, base64UrlToBytes, bytesToBase64Url } from '../crypto/aes'
 import type { AdminAction, Pool, PoolComment, PoolContent } from '../types'
-import { KIND_ADMIN_ACTION, KIND_COMMENT, KIND_POOL } from '../types'
+import { BWF_VERSION_TAG, KIND_ADMIN_ACTION, KIND_COMMENT, KIND_POOL } from '../types'
 import { MAX_NEVENT_HINTS } from './relays'
 
 const ALT_TAG = ['alt', 'Encrypted BetWithFriends event — see https://betwithfriends.niot.space']
@@ -16,7 +16,7 @@ export async function buildPoolTemplate(content: PoolContent, aesKey: Uint8Array
   return {
     kind: KIND_POOL,
     created_at: now(),
-    tags: [ALT_TAG],
+    tags: [ALT_TAG, BWF_VERSION_TAG],
     content: await aesEncrypt(aesKey, JSON.stringify(content)),
   }
 }
@@ -72,7 +72,7 @@ export async function buildAdminActionTemplate(
   return {
     kind: KIND_ADMIN_ACTION,
     created_at: now(),
-    tags: [['e', poolId], ALT_TAG],
+    tags: [['e', poolId], ALT_TAG, BWF_VERSION_TAG],
     content: await aesEncrypt(aesKey, JSON.stringify(action)),
   }
 }
@@ -135,7 +135,7 @@ export async function buildCommentTemplate(
   return {
     kind: KIND_COMMENT,
     created_at: now(),
-    tags: [['e', poolId], ALT_TAG],
+    tags: [['e', poolId], ALT_TAG, BWF_VERSION_TAG],
     content: await aesEncrypt(aesKey, JSON.stringify({ text })),
   }
 }

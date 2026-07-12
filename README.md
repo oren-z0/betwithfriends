@@ -35,6 +35,10 @@ bets and pay winners by hand. **Only bet with someone you know.**
 | 8881 | Admin action | `close` / `winner` / `cancel` / `paid` / `unpaid` |
 | 8882 | Comment (admin only) | `{ text }` |
 
+Every event this app authors (8880, 8881, 8882, and the 9734 zap request) also
+carries a plaintext `["bwf-version", "1"]` tag, so a future app version can
+tell old- vs new-schema events apart before decrypting them.
+
 ## Development
 
 ```bash

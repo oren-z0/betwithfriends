@@ -88,6 +88,15 @@ export const KIND_COMMENT = 8882
 export const KIND_ZAP_REQUEST = 9734
 export const KIND_ZAP_RECEIPT = 9735
 
+/**
+ * Marks every event this app authors (pool, admin action, comment, bet zap
+ * request) with the app's payload-schema version, so a future version can
+ * tell old-client events apart from new ones before it even decrypts them.
+ * Nostr custom tags are conventionally lowercase kebab-case, not camelCase
+ * or snake_case (e.g. NIP-36's "content-warning").
+ */
+export const BWF_VERSION_TAG = ['bwf-version', '1']
+
 export const DEFAULTS = {
   adminFeePct: 2,
   maxBets: 20,
