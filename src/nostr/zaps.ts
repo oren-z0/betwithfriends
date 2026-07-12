@@ -3,7 +3,7 @@ import { verifyEvent } from 'nostr-tools/pure'
 import { aesDecryptBytes, aesEncryptBytes, base64ToBytes, bytesToBase64 } from '../crypto/aes'
 import { bolt11AmountMsats, MAX_REWARD_ADDRESS_CHARS } from '../lightning/lnurl'
 import type { Bet, BetPayload } from '../types'
-import { KIND_ZAP_RECEIPT, KIND_ZAP_REQUEST } from '../types'
+import { BWF_VERSION_TAG, KIND_ZAP_RECEIPT, KIND_ZAP_REQUEST } from '../types'
 
 /**
  * Compact binary encoding of the bet payload. Zap content must stay within
@@ -94,6 +94,7 @@ export async function buildZapRequestTemplate(args: {
       ['amount', String(args.amountSats * 1000)],
       ['p', args.adminPubkey],
       ['e', args.poolId],
+      BWF_VERSION_TAG,
     ],
     content: bytesToBase64(
       await aesEncryptBytes(args.aesKey, encodeBetPayload(args.payload), bettorAad(args.bettorPubkey)),
@@ -105,8 +106,15 @@ export interface ReceiptContext {
   poolId: string
   adminPubkey: string
   aesKey: Uint8Array
-  /** The admin's LNURL provider pubkey; when known, receipts from other signers are rejected. */
-  providerPubkey?: string
+  /**
+   * The admin's LNURL provider pubkey — required, not optional. Only that
+   * key's signature proves a receipt came from the admin's own wallet, i.e.
+   * that real sats were actually paid. Callers that don't know it yet MUST
+   * NOT call this function with a placeholder — anyone could self-sign a
+   * fake kind-9735 event claiming an arbitrary amount, and skipping this
+   * check would let it through as a real bet.
+   */
+  providerPubkey: string
 }
 
 /**
@@ -115,7 +123,7 @@ export interface ReceiptContext {
  */
 export async function parseZapReceipt(receipt: Event, ctx: ReceiptContext): Promise<Bet | null> {
   if (receipt.kind !== KIND_ZAP_RECEIPT) return null
-  if (ctx.providerPubkey && receipt.pubkey !== ctx.providerPubkey) return null
+  if (receipt.pubkey !== ctx.providerPubkey) return null
 
   const description = receipt.tags.find((t) => t[0] === 'description')?.[1]
   if (!description) return null

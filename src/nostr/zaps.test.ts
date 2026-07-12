@@ -3,7 +3,7 @@ import * as nip44 from 'nostr-tools/nip44'
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 import { describe, expect, it } from 'vitest'
 import { generateAesKey } from '../crypto/aes'
-import { KIND_ZAP_RECEIPT } from '../types'
+import { BWF_VERSION_TAG, KIND_ZAP_RECEIPT } from '../types'
 import { buildZapRequestTemplate, padRewardAddress, parseZapReceipt, unpadRewardAddress } from './zaps'
 
 const bettorSk = generateSecretKey()
@@ -110,18 +110,20 @@ describe('zap receipts as bets', () => {
   it('rejects zap requests with a forged signature', async () => {
     const aesKey = generateAesKey()
     const receipt = await makeReceipt({ aesKey, tamperRequestSig: true })
-    expect(await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey })).toBeNull()
+    expect(await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk })).toBeNull()
   })
 
   it('rejects zaps that target a different pool', async () => {
     const aesKey = generateAesKey()
     const receipt = await makeReceipt({ aesKey, poolIdInRequest: 'cd'.repeat(32) })
-    expect(await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey })).toBeNull()
+    expect(await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk })).toBeNull()
   })
 
   it('rejects zaps whose content is not encrypted with the pool key', async () => {
     const receipt = await makeReceipt({ aesKey: generateAesKey() })
-    expect(await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey: generateAesKey() })).toBeNull()
+    expect(
+      await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey: generateAesKey(), providerPubkey: providerPk }),
+    ).toBeNull()
   })
 
   it("rejects a payload transplanted from another bettor's zap (AAD binding)", async () => {
@@ -148,8 +150,58 @@ describe('zap receipts as bets', () => {
       },
       providerSk,
     )
-    expect(await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey })).toBeNull()
+    expect(await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk })).toBeNull()
     // Sanity: the original, non-transplanted receipt still parses.
-    expect(await parseZapReceipt(original, { poolId, adminPubkey: adminPk, aesKey })).not.toBeNull()
+    expect(
+      await parseZapReceipt(original, { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk }),
+    ).not.toBeNull()
+  })
+
+  it('a self-signed forged receipt (no real payment) is rejected outright', async () => {
+    // An attacker who knows the pool's AES key (anyone with the share link
+    // does) can build a perfectly-valid-looking zap request and wrap it in
+    // their own self-signed "receipt" — the one thing they can't fake is the
+    // admin's actual LNURL provider signature.
+    const aesKey = generateAesKey()
+    const forgedRequest = finalizeEvent(
+      await buildZapRequestTemplate({
+        poolId,
+        adminPubkey: adminPk,
+        bettorPubkey: getPublicKey(bettorSk),
+        amountSats: 1_000_000, // claim a huge bet
+        relays: ['wss://relay.damus.io'],
+        payload: { optionId: 'a', rewardAddress: 'plain:attacker@wallet.com' },
+        aesKey,
+      }),
+      bettorSk,
+    )
+    const attackerSk = generateSecretKey() // NOT the real LNURL provider
+    const forgedReceipt = finalizeEvent(
+      {
+        kind: KIND_ZAP_RECEIPT,
+        created_at: forgedRequest.created_at + 1,
+        tags: [['p', adminPk], ['e', poolId], ['description', JSON.stringify(forgedRequest)]],
+        content: '',
+      },
+      attackerSk,
+    )
+    expect(
+      await parseZapReceipt(forgedReceipt, { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk }),
+    ).toBeNull()
+  })
+})
+
+describe('bwf-version tag', () => {
+  it('is attached to the zap request', async () => {
+    const template = await buildZapRequestTemplate({
+      poolId,
+      adminPubkey: adminPk,
+      bettorPubkey: getPublicKey(bettorSk),
+      amountSats: 1000,
+      relays: ['wss://relay.damus.io'],
+      payload: { optionId: 'a', rewardAddress: 'plain:winner@wallet.com' },
+      aesKey: generateAesKey(),
+    })
+    expect(template.tags).toContainEqual(BWF_VERSION_TAG)
   })
 })

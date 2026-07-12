@@ -641,11 +641,17 @@ export function createApp() {
         const event = await fetchEventById(ref.poolId, relays)
         if (!event) throw new Error('Pool not found on its relays — check the link or try again')
         this.pool = await parsePoolEvent(event, ref.aesKey, relays)
-        void this.loadAdminSide()
         this.subscribePoolEvents()
         this.ticker = setInterval(() => {
           this.nowSec = Math.floor(Date.now() / 1000)
         }, 1000)
+        // Runs in the background so the pool renders immediately. Zap
+        // receipts that arrive before the admin's provider pubkey is known
+        // are safely skipped (see handlePoolEvent), not dropped — this
+        // refresh re-fetches and validates them promptly once it's loaded.
+        void this.loadAdminSide().then(() => {
+          if (this.adminParams) void this.refreshPoolEvents()
+        })
       } catch (e) {
         this.poolError = errMsg(e)
       } finally {
@@ -699,6 +705,10 @@ export function createApp() {
       if (!this.pool || this.refreshing) return
       this.refreshing = true
       try {
+        // Retries a failed/still-missing admin lookup, so a temporary outage
+        // in the admin's LNURL server self-heals on the next refresh instead
+        // of leaving zap receipts fail-closed (skipped) indefinitely.
+        if (!this.adminParams) await this.loadAdminSide()
         const pool = this.pool
         const results = await Promise.all(
           this.poolEventFilters(pool).map((filter) =>
@@ -720,12 +730,19 @@ export function createApp() {
       if (!this.pool || !this.poolRef) return
       if (event.kind === KIND_ZAP_RECEIPT) {
         if (this.seenReceipts.has(event.id)) return
+        // The admin's LNURL provider pubkey isn't known yet (still loading, or
+        // its lookup failed) — fail closed rather than skip the signer check:
+        // without it, anyone could self-sign a fake receipt claiming any
+        // amount. Don't mark the event seen, so refreshPoolEvents retries it
+        // once the provider pubkey is known (see loadAdminSide/loadPool).
+        const providerPubkey = this.adminParams?.nostrPubkey
+        if (!providerPubkey) return
         this.seenReceipts.add(event.id)
         const bet = await parseZapReceipt(event, {
           poolId: this.pool.id,
           adminPubkey: this.pool.adminPubkey,
           aesKey: this.poolRef.aesKey,
-          providerPubkey: this.adminParams?.nostrPubkey,
+          providerPubkey,
         })
         if (!bet) return
         this.bets.push(bet)
