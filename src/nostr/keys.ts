@@ -26,12 +26,12 @@ export function hasExtension(): boolean {
 }
 
 export async function loginWithExtension(): Promise<Session> {
-  if (!window.nostr) throw new Error('No nostr extension found')
+  if (!window.nostr) throw new Error('No Nostr extension found')
   // NIP-44 support is mandatory: reward addresses are encrypted to the admin
   // with it, and we refuse to fall back to weaker encryption.
   if (typeof window.nostr.nip44?.encrypt !== 'function' || typeof window.nostr.nip44?.decrypt !== 'function') {
     throw new Error(
-      'Your nostr extension is too old — it lacks NIP-44 encryption, which BetWithFriends requires. Please update it or switch to an extension with NIP-44 support (e.g. a current Alby or nos2x).',
+      'Your Nostr extension is too old — it lacks NIP-44 encryption, which BetWithFriends requires. Please update it or switch to an extension with NIP-44 support (e.g. a current Alby or nos2x).',
     )
   }
   const pubkey = await window.nostr.getPublicKey()
@@ -128,7 +128,7 @@ export async function nip44EncryptTo(
   plaintext: string,
 ): Promise<string> {
   if (session.method === 'extension') {
-    if (!window.nostr?.nip44) throw new Error('Your nostr extension does not support NIP-44 encryption')
+    if (!window.nostr?.nip44) throw new Error('Your Nostr extension does not support NIP-44 encryption')
     return window.nostr.nip44.encrypt(recipientPubkey, plaintext)
   }
   if (!session.secretKey) throw new Error('No secret key in session')

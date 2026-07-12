@@ -4,22 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0f1117" />
-  <title>BetWithFriends — friendly betting pools over nostr ⚡</title>
-  <meta name="description" content="Create a private betting pool, share a link, and let friends bet with lightning zaps. No server, no signup — just nostr." />
+  <title>BetWithFriends — friendly betting pools over Nostr ⚡</title>
+  <meta name="description" content="Create a private betting pool, share a link, and let friends bet with lightning zaps. No server, no signup — just Nostr." />
   <link rel="icon" type="image/png" href="/icon.png" />
   <link rel="apple-touch-icon" href="/icon.png" />
   <!-- Open Graph / social link previews (WhatsApp, Telegram, X, …) -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="BetWithFriends" />
-  <meta property="og:title" content="BetWithFriends — friendly betting pools over nostr ⚡" />
-  <meta property="og:description" content="Create a private betting pool, share a link, and let friends bet with lightning zaps. No server, no signup — just nostr." />
+  <meta property="og:title" content="BetWithFriends — friendly betting pools over Nostr ⚡" />
+  <meta property="og:description" content="Create a private betting pool, share a link, and let friends bet with lightning zaps. No server, no signup — just Nostr." />
   <meta property="og:url" content="https://betwithfriends.niot.space/" />
   <meta property="og:image" content="https://betwithfriends.niot.space/og-image.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="BetWithFriends — friendly betting pools over nostr ⚡" />
-  <meta name="twitter:description" content="Create a private betting pool, share a link, and let friends bet with lightning zaps. No server, no signup — just nostr." />
+  <meta name="twitter:title" content="BetWithFriends — friendly betting pools over Nostr ⚡" />
+  <meta name="twitter:description" content="Create a private betting pool, share a link, and let friends bet with lightning zaps. No server, no signup — just Nostr." />
   <meta name="twitter:image" content="https://betwithfriends.niot.space/og-image.png" />
   <script type="module" src="/src/main.ts"></script>
 </head>
@@ -92,7 +92,7 @@
           <p class="tagline">
             Create a private betting pool, share one link with your friends, and let them
             back their pick with bitcoin lightning zaps. No server, no signup — everything
-            lives encrypted on nostr.
+            lives encrypted on Nostr.
           </p>
           <a class="btn primary" href="#/create">Create a betting pool</a>
           <div class="hero-steps">
@@ -121,7 +121,7 @@
         <template x-if="!session">
           <div class="card">
             <h2>First, log in</h2>
-            <p class="dim">The pool is published from your nostr identity, and bets are zapped to your lightning wallet.</p>
+            <p class="dim">The pool is published from your Nostr identity, and bets are zapped to your lightning wallet.</p>
             <button class="btn primary" @click="openLogin('general')">Log in / create a profile</button>
           </div>
         </template>
@@ -138,7 +138,7 @@
             <template x-if="wallet.state === 'missing' || wallet.state === 'bad'">
               <div class="notice warn">
                 <template x-if="wallet.state === 'missing'">
-                  <p style="margin-top:0">Your nostr profile has no lightning address, so friends can’t zap you bets. Add one to continue:</p>
+                  <p style="margin-top:0">Your Nostr profile has no lightning address, so friends can’t zap you bets. Add one to continue:</p>
                 </template>
                 <template x-if="wallet.state === 'bad'">
                   <p style="margin-top:0">Your lightning address <strong x-text="wallet.lud16"></strong> can’t host this pool: <span x-text="wallet.reason"></span>. Set a different one (e.g. Wallet of Satoshi, Alby, Coinos):</p>
@@ -508,7 +508,7 @@
             <div class="notice">
               🔒 The pool’s details, your pick and your reward address are encrypted — only people
               with this link can read them. Note that the <strong>amounts and timing</strong> of
-              zaps are public on the nostr network, and this pool exists only as long as its
+              zaps are public on the Nostr network, and this pool exists only as long as its
               relays keep the events.
             </div>
           </div>
@@ -517,7 +517,7 @@
     </template>
 
     <footer class="site">
-      BetWithFriends · bets live on nostr relays, payments on the bitcoin lightning network ·
+      BetWithFriends · bets live on Nostr relays, payments on the bitcoin lightning network ·
       bet responsibly, only with people you trust ·
       <a href="#" @click.prevent="disclaimerAccepted = false">Disclaimer</a> ·
       <a href="https://github.com/oren-z0/betwithfriends" target="_blank" rel="noopener noreferrer">Source</a> ·
@@ -535,10 +535,10 @@
             <h2 x-text="login.context === 'bet' ? 'Log in to bet' : 'Log in with Nostr'"></h2>
             <div class="choice-list">
               <button class="btn" :disabled="login.busy || !hasExtension()" @click="doExtensionLogin()"
-                      x-text="hasExtension() ? '🧩 Use my nostr extension' : '🧩 Use my nostr extension (not found)'">
+                      x-text="hasExtension() ? '🧩 Use my Nostr extension' : '🧩 Use my Nostr extension (not found)'">
               </button>
               <button class="btn" @click="login.mode = 'nsec'">🔑 Enter my secret key (nsec)</button>
-              <button class="btn" @click="login.mode = 'new'">✨ Create a new nostr profile</button>
+              <button class="btn" @click="login.mode = 'new'">✨ Create a new Nostr profile</button>
             </div>
             <p class="error" x-show="login.error" x-text="login.error"></p>
             <div class="close-row"><button class="btn small" @click="login.open = false">Cancel</button></div>
@@ -560,7 +560,7 @@
 
         <template x-if="login.mode === 'new'">
           <div>
-            <h2>Create a nostr profile</h2>
+            <h2>Create a Nostr profile</h2>
             <p class="hint">This makes a brand-new identity for you. You'll get a secret key (nsec) — it's the only way back into this account.</p>
             <label>Display name *</label>
             <input type="text" x-model="login.newName" required maxlength="40" placeholder="e.g. Dana" />
@@ -604,7 +604,7 @@
       <div class="modal">
         <template x-if="bet.state === 'creating'">
           <div class="center">
-            <h2>Creating an anonymous nostr profile…</h2>
+            <h2>Creating an anonymous Nostr profile…</h2>
             <p class="hint">No account needed — we're minting a one-off anonymous identity just for this zap.</p>
             <p x-show="!bet.error"><span class="spinner"></span></p>
             <p class="error" x-show="bet.error" x-text="bet.error"></p>

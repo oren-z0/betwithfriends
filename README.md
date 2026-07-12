@@ -1,13 +1,13 @@
 # BetWithFriends ⚡
 
 Friendly betting pools with your friends, settled over **bitcoin lightning** —
-no server, no signup. Everything lives encrypted on **nostr** relays.
+no server, no signup. Everything lives encrypted on **Nostr** relays.
 
 ## How it works
 
 1. **An admin creates a pool** — a question with 2+ options (title, optional
    description/image/background, admin fee, max bets, max bet size, optional
-   deadline). The pool is published as a nostr event whose content is
+   deadline). The pool is published as a Nostr event whose content is
    **AES-256-GCM encrypted**.
 2. **The share link carries everything**: a NIP-19 `nevent` (event id + relay
    hints) and the AES key, in the URL **hash** — so it never reaches any

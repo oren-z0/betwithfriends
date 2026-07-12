@@ -1,4 +1,4 @@
-// E2E harness: in-memory nostr relay (NIP-01) + mock LNURL-pay wallet that
+// E2E harness: in-memory Nostr relay (NIP-01) + mock LNURL-pay wallet that
 // "pays" every invoice instantly by publishing a kind-9735 zap receipt.
 import http from 'node:http'
 import { WebSocketServer, WebSocket } from 'ws'

@@ -3,7 +3,7 @@ import { signEvent, type Session } from './keys'
 
 /**
  * Blossom (BUD-01/02/11) media servers: content-addressed blob storage
- * authenticated with a nostr-signed event — no account/API key needed, which
+ * authenticated with a Nostr-signed event — no account/API key needed, which
  * fits this app's no-backend, bring-your-own-identity model. A short,
  * hand-picked list rather than a free-text host, since an arbitrary server
  * could be malicious (see the upload size cap and disclaimer below).

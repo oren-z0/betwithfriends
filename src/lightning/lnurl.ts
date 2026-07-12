@@ -73,7 +73,7 @@ export async function fetchPayParams(addressOrLnurl: string): Promise<LnurlPayPa
  */
 export function checkZapSupport(params: LnurlPayParams): { ok: boolean; reason?: string } {
   if (!params.allowsNostr || !params.nostrPubkey) {
-    return { ok: false, reason: 'This wallet does not support nostr zaps (NIP-57)' }
+    return { ok: false, reason: 'This wallet does not support Nostr zaps (NIP-57)' }
   }
   if (params.commentAllowed !== undefined && params.commentAllowed > 0 && params.commentAllowed < BET_PAYLOAD_MAX_CHARS) {
     return {

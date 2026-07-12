@@ -33,7 +33,7 @@ try {
 
   await a.getByRole('link', { name: 'Create a betting pool' }).click()
   await a.getByRole('button', { name: 'Log in / create a profile' }).click()
-  await a.getByRole('button', { name: '✨ Create a new nostr profile' }).click()
+  await a.getByRole('button', { name: '✨ Create a new Nostr profile' }).click()
   await a.getByPlaceholder('e.g. Dana').fill('TestAdmin')
   await a.getByRole('button', { name: 'Create profile' }).click()
   step('nsec backup gate')

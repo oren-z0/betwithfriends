@@ -1,11 +1,11 @@
 ---
 name: verify
-description: Build, launch and drive BetWithFriends end-to-end against a local nostr relay + mock LNURL wallet, with screenshots.
+description: Build, launch and drive BetWithFriends end-to-end against a local Nostr relay + mock LNURL wallet, with screenshots.
 ---
 
 # Verifying BetWithFriends
 
-Frontend-only SPA (Vite + TS + Alpine). State lives on nostr relays; bets are
+Frontend-only SPA (Vite + TS + Alpine). State lives on Nostr relays; bets are
 NIP-57 zaps. Full E2E runs offline against a local harness — no public relays,
 no real sats.
 
