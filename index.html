@@ -63,7 +63,7 @@
       <a class="brand" href="#/">Bet<span class="bolt">⚡</span>WithFriends</a>
       <div>
         <template x-if="!session">
-          <button class="btn small" @click="openLogin('general')">Log in</button>
+          <button class="btn small" @click="openLogin('general')">Log in with Nostr</button>
         </template>
         <template x-if="session">
           <div style="position: relative">
@@ -88,7 +88,7 @@
       <main>
         <section class="hero">
           <img class="hero-icon" src="/icon.png" alt="BetWithFriends" width="88" height="88" />
-          <h1>Friendly bets,<br />settled with <span class="bolt">⚡</span> lightning</h1>
+          <h1>Friendly bets, settled<br />with Bitcoin <span class="bolt">⚡</span> Lightning</h1>
           <p class="tagline">
             Create a private betting pool, share one link with your friends, and let them
             back their pick with bitcoin lightning zaps. No server, no signup — everything
@@ -532,7 +532,7 @@
       <div class="modal">
         <template x-if="login.mode === 'menu'">
           <div>
-            <h2 x-text="login.context === 'bet' ? 'Log in to bet' : 'Log in to nostr'"></h2>
+            <h2 x-text="login.context === 'bet' ? 'Log in to bet' : 'Log in with Nostr'"></h2>
             <div class="choice-list">
               <button class="btn" :disabled="login.busy || !hasExtension()" @click="doExtensionLogin()"
                       x-text="hasExtension() ? '🧩 Use my nostr extension' : '🧩 Use my nostr extension (not found)'">
