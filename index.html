@@ -160,11 +160,46 @@
             <label>Description <span class="dim">(optional)</span></label>
             <textarea x-model="form.description" rows="3" placeholder="Details, rules, kickoff time…"></textarea>
 
-            <label>Image URL <span class="dim">(optional)</span></label>
-            <input type="url" x-model="form.imageUrl" @blur="validateImageUrl()"
-                   @keydown.enter.prevent="validateImageUrl()"
-                   @paste="setTimeout(() => validateImageUrl(), 0)"
-                   placeholder="https://… (shown above the title)" />
+            <label>Banner URL <span class="dim">(optional)</span></label>
+
+            <template x-if="!form.imageUploadOpen">
+              <div>
+                <input type="url" x-model="form.imageUrl" @blur="validateImageUrl()"
+                       @keydown.enter.prevent="validateImageUrl()"
+                       @paste="setTimeout(() => validateImageUrl(), 0)"
+                       placeholder="https://… (shown above the title)" />
+                <button type="button" class="link-btn" @click="form.imageUploadOpen = true">Upload from computer</button>
+              </div>
+            </template>
+
+            <template x-if="form.imageUploadOpen">
+              <div class="option-edit">
+                <div class="head">
+                  <span>Blossom Server</span>
+                  <button type="button" class="btn small" @click="form.imageUploadOpen = false">Cancel</button>
+                </div>
+                <select x-model="form.blossomServerId" style="margin-bottom: 10px">
+                  <template x-for="s in blossomServers()" :key="s.id">
+                    <option :value="s.id" x-text="s.label"></option>
+                  </template>
+                </select>
+                <input type="file" accept="image/*" x-ref="imageFileInput" style="display: none"
+                       @change="uploadImageFile('image', $event.target.files[0]); $event.target.value = ''" />
+                <div class="dropzone" :class="{ dragover: form.imageDragActive }"
+                     @click="$refs.imageFileInput.click()"
+                     @dragover.prevent="form.imageDragActive = true"
+                     @dragleave.prevent="form.imageDragActive = false"
+                     @drop.prevent="form.imageDragActive = false; uploadImageFile('image', $event.dataTransfer.files[0])">
+                  <template x-if="form.imageUploading">
+                    <p><span class="spinner"></span> Uploading…</p>
+                  </template>
+                  <template x-if="!form.imageUploading">
+                    <p>Drag an image here, or click to choose a file</p>
+                  </template>
+                </div>
+              </div>
+            </template>
+
             <p class="error" x-show="form.imageUrlError" x-text="form.imageUrlError"></p>
             <template x-if="form.imageUrlValidated">
               <img class="pool-image" :src="form.imageUrlValidated" alt="Pool image preview" />
@@ -185,10 +220,44 @@
             </div>
             <template x-if="form.backgroundId === 'custom'">
               <div>
-                <input type="url" x-model="form.customBackgroundUrl" @blur="validateCustomBackground()"
-                       @keydown.enter.prevent="validateCustomBackground()"
-                       @paste="setTimeout(() => validateCustomBackground(), 0)"
-                       placeholder="https://…/background.png" style="margin-top: 10px" />
+                <template x-if="!form.bgUploadOpen">
+                  <div style="margin-top: 10px">
+                    <input type="url" x-model="form.customBackgroundUrl" @blur="validateCustomBackground()"
+                           @keydown.enter.prevent="validateCustomBackground()"
+                           @paste="setTimeout(() => validateCustomBackground(), 0)"
+                           placeholder="https://…/background.png" />
+                    <button type="button" class="link-btn" @click="form.bgUploadOpen = true">Upload from computer</button>
+                  </div>
+                </template>
+
+                <template x-if="form.bgUploadOpen">
+                  <div class="option-edit" style="margin-top: 10px">
+                    <div class="head">
+                      <span>Blossom Server</span>
+                      <button type="button" class="btn small" @click="form.bgUploadOpen = false">Cancel</button>
+                    </div>
+                    <select x-model="form.blossomServerId" style="margin-bottom: 10px">
+                      <template x-for="s in blossomServers()" :key="s.id">
+                        <option :value="s.id" x-text="s.label"></option>
+                      </template>
+                    </select>
+                    <input type="file" accept="image/*" x-ref="bgFileInput" style="display: none"
+                           @change="uploadImageFile('background', $event.target.files[0]); $event.target.value = ''" />
+                    <div class="dropzone" :class="{ dragover: form.bgDragActive }"
+                         @click="$refs.bgFileInput.click()"
+                         @dragover.prevent="form.bgDragActive = true"
+                         @dragleave.prevent="form.bgDragActive = false"
+                         @drop.prevent="form.bgDragActive = false; uploadImageFile('background', $event.dataTransfer.files[0])">
+                      <template x-if="form.bgUploading">
+                        <p><span class="spinner"></span> Uploading…</p>
+                      </template>
+                      <template x-if="!form.bgUploading">
+                        <p>Drag an image here, or click to choose a file</p>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+
                 <p class="hint">Dark backgrounds work best — the text on the page is light.</p>
                 <p class="error" x-show="form.customBgError" x-text="form.customBgError"></p>
               </div>

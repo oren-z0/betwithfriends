@@ -52,6 +52,7 @@ import {
   pool as relayPool,
   publishToRelays,
 } from './nostr/relays'
+import { BLOSSOM_SERVERS, uploadToBlossom } from './nostr/blossom'
 import { buildZapRequestTemplate, padRewardAddress, parseZapReceipt, unpadRewardAddress } from './nostr/zaps'
 import { computePayouts, computeRefunds, totalPotSats, totalsByOption } from './payouts'
 import type { Bet, Payout, Pool, PoolComment, Profile } from './types'
@@ -101,10 +102,17 @@ export function createApp() {
       imageUrl: '',
       imageUrlValidated: '',
       imageUrlError: '',
+      imageUploading: false,
+      imageUploadOpen: false,
+      imageDragActive: false,
       backgroundId: '',
       customBackgroundUrl: '',
       customBgValidated: '',
       customBgError: '',
+      bgUploading: false,
+      bgUploadOpen: false,
+      bgDragActive: false,
+      blossomServerId: BLOSSOM_SERVERS[0]!.id,
       options: [
         { title: '', description: '' },
         { title: '', description: '' },
@@ -414,10 +422,16 @@ export function createApp() {
         imageUrl: '',
         imageUrlValidated: '',
         imageUrlError: '',
+        imageUploading: false,
+        imageUploadOpen: false,
+        imageDragActive: false,
         backgroundId: '',
         customBackgroundUrl: '',
         customBgValidated: '',
         customBgError: '',
+        bgUploading: false,
+        bgUploadOpen: false,
+        bgDragActive: false,
         options: [
           { title: '', description: '' },
           { title: '', description: '' },
@@ -496,6 +510,39 @@ export function createApp() {
         }
       }
       img.src = url
+    },
+
+    blossomServers() {
+      return BLOSSOM_SERVERS
+    },
+
+    /** Uploads a file to the chosen Blossom server and fills either the image or the custom-background URL field. */
+    async uploadImageFile(target: 'image' | 'background', file: File | undefined) {
+      if (!file || !this.session) return
+      const busyKey = target === 'image' ? 'imageUploading' : 'bgUploading'
+      const errorKey = target === 'image' ? 'imageUrlError' : 'customBgError'
+      const openKey = target === 'image' ? 'imageUploadOpen' : 'bgUploadOpen'
+      if (this.form[busyKey]) return // a drop while already uploading — ignore, don't race
+      const server = BLOSSOM_SERVERS.find((s) => s.id === this.form.blossomServerId) ?? BLOSSOM_SERVERS[0]!
+      this.form[busyKey] = true
+      this.form[errorKey] = ''
+      try {
+        const url = await uploadToBlossom(this.session, server, file)
+        // The upload endpoint's own 200/201 is stronger confirmation than a
+        // follow-up <img> load probe, so the preview is set directly.
+        if (target === 'image') {
+          this.form.imageUrl = url
+          this.form.imageUrlValidated = url
+        } else {
+          this.form.customBackgroundUrl = url
+          this.form.customBgValidated = url
+        }
+        this.form[openKey] = false // back to the URL-input view, now filled in
+      } catch (e) {
+        this.form[errorKey] = errMsg(e)
+      } finally {
+        this.form[busyKey] = false
+      }
     },
 
     /** Live page background while creating: the picked pattern, or a custom URL once it loaded. */
