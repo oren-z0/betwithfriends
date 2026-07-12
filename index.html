@@ -425,7 +425,11 @@
                 </template>
                 <template x-if="isAdmin">
                   <form class="comment-form" @submit.prevent="postComment()">
-                    <input type="text" x-model="commentText" maxlength="500" placeholder="Write a comment…" />
+                    <textarea x-model="commentText" maxlength="500" rows="1"
+                              x-effect="commentText; $el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'"
+                              placeholder="Write a comment… (Ctrl/Cmd+Enter to post)"
+                              @keydown.enter.ctrl.prevent="postComment()"
+                              @keydown.enter.meta.prevent="postComment()"></textarea>
                     <button type="submit" class="btn small primary" :disabled="postingComment || !commentText.trim()">Post</button>
                   </form>
                 </template>

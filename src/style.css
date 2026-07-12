@@ -542,10 +542,15 @@ label {
   display: flex;
   gap: 8px;
   margin-top: 12px;
+  align-items: flex-end;
 }
 
-.comment-form input {
+.comment-form textarea {
   flex: 1;
+  resize: none;
+  overflow-y: auto;
+  max-height: 200px;
+  line-height: 1.4;
 }
 
 /* payouts */
