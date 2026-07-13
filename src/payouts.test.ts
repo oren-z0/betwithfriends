@@ -9,7 +9,7 @@ function bet(optionId: string, amountSats: number, id = Math.random().toString(3
     bettorPubkey: 'pk-' + id,
     optionId,
     amountSats,
-    rewardAddress: 'plain:x@y.com',
+    rewardAddress: 'bm90LWEtcmVhbC1jaXBoZXJ0ZXh0', // opaque NIP-44 ciphertext; payouts never read it
     createdAt: 0,
   }
 }

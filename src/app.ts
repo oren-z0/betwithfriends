@@ -6,7 +6,6 @@ import {
   checkZapSupport,
   fetchPayParams,
   isLightningAddress,
-  MAX_REWARD_ADDRESS_CHARS,
   requestInvoice,
   type LnurlPayParams,
 } from './lightning/lnurl'
@@ -53,7 +52,13 @@ import {
   publishToRelays,
 } from './nostr/relays'
 import { BLOSSOM_SERVERS, uploadToBlossom } from './nostr/blossom'
-import { buildZapRequestTemplate, padRewardAddress, parseZapReceipt, unpadRewardAddress } from './nostr/zaps'
+import {
+  buildZapRequestTemplate,
+  MAX_REWARD_ADDRESS_BYTES,
+  padRewardAddress,
+  parseZapReceipt,
+  unpadRewardAddress,
+} from './nostr/zaps'
 import { computePayouts, computeRefunds, totalPotSats, totalsByOption } from './payouts'
 import type { Bet, Payout, Pool, PoolComment, Profile } from './types'
 import { DEFAULTS, KIND_ADMIN_ACTION, KIND_COMMENT, KIND_ZAP_RECEIPT } from './types'
@@ -998,8 +1003,8 @@ export function createApp() {
         this.bet.error = 'Enter the lightning address that should receive your winnings (name@wallet.com)'
         return
       }
-      if (address.length > MAX_REWARD_ADDRESS_CHARS) {
-        this.bet.error = `That address is too long — up to ${MAX_REWARD_ADDRESS_CHARS} characters`
+      if (new TextEncoder().encode(address).length >= MAX_REWARD_ADDRESS_BYTES) {
+        this.bet.error = `That address is too long — up to ${MAX_REWARD_ADDRESS_BYTES - 1} characters`
         return
       }
       this.bet.busy = true
@@ -1009,8 +1014,7 @@ export function createApp() {
         // The reward address is readable only by the admin: NIP-44 to their
         // pubkey, NUL-padded to a fixed length so all bet payloads look identical.
         const padded = padRewardAddress(address)
-        const encrypted = await nip44EncryptTo(session, this.pool.adminPubkey, padded)
-        const rewardAddress = `nip44:${encrypted}`
+        const rewardAddress = await nip44EncryptTo(session, this.pool.adminPubkey, padded)
         const template = await buildZapRequestTemplate({
           poolId: this.pool.id,
           adminPubkey: this.pool.adminPubkey,
@@ -1112,14 +1116,7 @@ export function createApp() {
     /** Decrypts a bet's reward address — only the admin's key can. */
     async decryptAddressOf(bet: Bet): Promise<string> {
       if (!this.session) throw new Error('Log in as the admin to read reward addresses')
-      let address: string
-      if (bet.rewardAddress.startsWith('nip44:')) {
-        address = await nip44DecryptFrom(this.session, bet.bettorPubkey, bet.rewardAddress.slice('nip44:'.length))
-      } else if (bet.rewardAddress.startsWith('plain:')) {
-        address = bet.rewardAddress.slice('plain:'.length)
-      } else {
-        throw new Error('Unrecognized reward address format')
-      }
+      const address = await nip44DecryptFrom(this.session, bet.bettorPubkey, bet.rewardAddress)
       return unpadRewardAddress(address)
     },
 

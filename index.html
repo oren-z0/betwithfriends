@@ -625,7 +625,7 @@
             <input type="number" x-model="bet.amount" min="1" :max="pool?.content.maxBetSats" inputmode="numeric"
                    :placeholder="'up to ' + fmtSats(pool?.content.maxBetSats ?? 0)" />
             <label>Reward address *</label>
-            <input type="text" x-model="bet.rewardAddress" maxlength="63" placeholder="you@walletofsatoshi.com" autocomplete="off" />
+            <input type="text" x-model="bet.rewardAddress" maxlength="127" placeholder="you@walletofsatoshi.com" autocomplete="off" />
             <p class="hint">
               If you win, the admin pays your winnings to this lightning address. It is encrypted
               so only the admin can see it.

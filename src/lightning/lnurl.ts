@@ -6,21 +6,9 @@ export interface LnurlPayParams {
   minSendable: number
   maxSendable: number
   metadata: string
-  commentAllowed?: number
   allowsNostr?: boolean
   nostrPubkey?: string
 }
-
-/**
- * Exact size of our encrypted bet payload in the zap request content: the
- * reward address is capped at 63 chars and NUL-padded to exactly 63 before
- * NIP-44 encryption, so it always fills NIP-44's 64-byte padding bucket and
- * the binary-packed AES-GCM ciphertext is a constant 220 base64 chars —
- * under 255, the commentAllowed of the most popular wallets (Wallet of
- * Satoshi, Alby, Blink), and leaking nothing about the address length.
- */
-export const BET_PAYLOAD_MAX_CHARS = 220
-export const MAX_REWARD_ADDRESS_CHARS = 63
 
 export function isLightningAddress(value: string): boolean {
   return /^[a-z0-9._%+-]+@([a-z0-9.-]+\.[a-z]{2,}|localhost(:\d+)?|127\.0\.0\.1(:\d+)?)$/i.test(value.trim())
@@ -61,25 +49,19 @@ export async function fetchPayParams(addressOrLnurl: string): Promise<LnurlPayPa
     minSendable: Number(data.minSendable ?? 1000),
     maxSendable: Number(data.maxSendable ?? Number.MAX_SAFE_INTEGER),
     metadata: typeof data.metadata === 'string' ? data.metadata : '',
-    commentAllowed: typeof data.commentAllowed === 'number' ? data.commentAllowed : undefined,
     allowsNostr: data.allowsNostr === true,
     nostrPubkey: typeof data.nostrPubkey === 'string' ? data.nostrPubkey : undefined,
   }
 }
 
 /**
- * Checks whether the admin's wallet can host this pool's zaps: it must support
- * NIP-57 and must not enforce a comment limit smaller than our encrypted payload.
+ * Checks whether the admin's wallet can host this pool's zaps: it must
+ * support NIP-57. The encrypted bet rides in zap request tags, not content,
+ * so the wallet's commentAllowed limit (which caps content) is irrelevant.
  */
 export function checkZapSupport(params: LnurlPayParams): { ok: boolean; reason?: string } {
   if (!params.allowsNostr || !params.nostrPubkey) {
     return { ok: false, reason: 'This wallet does not support Nostr zaps (NIP-57)' }
-  }
-  if (params.commentAllowed !== undefined && params.commentAllowed > 0 && params.commentAllowed < BET_PAYLOAD_MAX_CHARS) {
-    return {
-      ok: false,
-      reason: `This wallet limits zap messages to ${params.commentAllowed} characters — too short for encrypted bets`,
-    }
   }
   return { ok: true }
 }

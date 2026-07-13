@@ -32,11 +32,9 @@ export interface Pool {
 export interface BetPayload {
   optionId: string
   /**
-   * The bettor's lightning address for receiving winnings, NUL-padded to a
-   * fixed length. "nip44:<ciphertext>" — encrypted to the admin's pubkey
-   * (only admin can read). The wire format also allows "plain:<address>",
-   * kept for decoding robustness; the app never produces it (extensions
-   * without NIP-44 are rejected at login).
+   * The bettor's lightning address for receiving winnings: base64 NIP-44
+   * ciphertext, encrypted to the admin's pubkey (only the admin can read),
+   * of the address NUL-padded to a fixed byte length.
    */
   rewardAddress: string
 }

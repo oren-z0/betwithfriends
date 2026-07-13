@@ -13,10 +13,11 @@ no server, no signup. Everything lives encrypted on **Nostr** relays.
    hints) and the AES key, in the URL **hash** — so it never reaches any
    server, and relays only ever see ciphertext.
 3. **Friends bet by zapping** (NIP-57): picking an option builds a zap request
-   whose content is the encrypted `{ optionId, rewardAddress }` — the reward
-   address is additionally NIP-44-encrypted so **only the admin** can read it.
-   The bet amount is the zap amount, paid straight to the admin's lightning
-   wallet.
+   carrying the bet in two encrypted tags — `bwf-option` (the option id) and
+   `bwf-address` (the reward address, additionally NIP-44-encrypted so **only
+   the admin** can read it). The content stays empty, so other Nostr clients
+   render it as a plain zap. The bet amount is the zap amount, paid straight
+   to the admin's lightning wallet.
 4. **The admin settles**: closes betting, declares the winning option, and pays
    each winner `stake / Σ(winning stakes) × pot × (1 − fee)` via lightning
    invoices fetched from the winners' reward addresses. Alternatively the admin
@@ -31,7 +32,7 @@ bets and pay winners by hand. **Only bet with someone you know.**
 | Kind | Meaning | Content (AES-256-GCM under the pool key) |
 |---|---|---|
 | 8880 | Pool | title, options, fee, limits, deadline… |
-| 9734/9735 | Bet (NIP-57 zap request/receipt) | `{ optionId, rewardAddress }` |
+| 9734/9735 | Bet (NIP-57 zap request/receipt) | empty — the bet rides in encrypted `bwf-option` / `bwf-address` tags |
 | 8881 | Admin action | `close` / `winner` / `cancel` / `paid` / `unpaid` |
 | 8882 | Comment (admin only) | `{ text }` |
 

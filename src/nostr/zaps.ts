@@ -1,73 +1,48 @@
 import type { Event, EventTemplate } from 'nostr-tools/core'
 import { verifyEvent } from 'nostr-tools/pure'
 import { aesDecryptBytes, aesEncryptBytes, base64ToBytes, bytesToBase64 } from '../crypto/aes'
-import { bolt11AmountMsats, MAX_REWARD_ADDRESS_CHARS } from '../lightning/lnurl'
+import { bolt11AmountMsats } from '../lightning/lnurl'
 import type { Bet, BetPayload } from '../types'
 import { BWF_VERSION_TAG, KIND_ZAP_RECEIPT, KIND_ZAP_REQUEST } from '../types'
 
 /**
- * Compact binary encoding of the bet payload. Zap content must stay within
- * LNURL servers' comment limits (commentAllowed is 255 for most popular
- * wallets), so instead of JSON with base64-inside-base64 we pack raw bytes:
- *   [version=1][optionId length][optionId utf8][mode][address bytes]
- * where mode 1 = raw NIP-44 ciphertext bytes (admin-only), 0 = plain utf8.
- * Typical result after AES+base64: ~170 chars (~215 for a 64-char address).
+ * The bet rides in two custom tags on the zap request, not in its content:
+ *   bwf-option  — AES-GCM(pool key) of the option id
+ *   bwf-address — AES-GCM(pool key) of the NIP-44(admin pubkey) ciphertext
+ *                 of the NUL-padded reward address
+ * Content stays empty so Nostr clients render a plain zap instead of a
+ * base64 blob, and LNURL servers' commentAllowed limits (which apply to
+ * content, not tags) no longer constrain the payload size.
  */
-const PAYLOAD_VERSION = 1
-const MODE_PLAIN = 0
-const MODE_NIP44 = 1
+export const TAG_OPTION = 'bwf-option'
+export const TAG_ADDRESS = 'bwf-address'
 
-export function encodeBetPayload(payload: BetPayload): Uint8Array {
-  const optionId = new TextEncoder().encode(payload.optionId)
-  if (optionId.length < 1 || optionId.length > 255) throw new Error('Bad option id')
-  let mode: number
-  let address: Uint8Array
-  if (payload.rewardAddress.startsWith('nip44:')) {
-    mode = MODE_NIP44
-    address = base64ToBytes(payload.rewardAddress.slice('nip44:'.length))
-  } else if (payload.rewardAddress.startsWith('plain:')) {
-    mode = MODE_PLAIN
-    address = new TextEncoder().encode(payload.rewardAddress.slice('plain:'.length))
-  } else {
-    throw new Error('Unrecognized reward address format')
-  }
-  const out = new Uint8Array(3 + optionId.length + address.length)
-  out[0] = PAYLOAD_VERSION
-  out[1] = optionId.length
-  out.set(optionId, 2)
-  out[2 + optionId.length] = mode
-  out.set(address, 3 + optionId.length)
-  return out
-}
+/**
+ * Padded byte length of every reward address. 128 exactly fills a NIP-44
+ * padding bucket, so together with the NUL padding every bwf-address tag
+ * is the same size — ciphertext length reveals nothing about the address.
+ */
+export const MAX_REWARD_ADDRESS_BYTES = 128
 
-export function decodeBetPayload(bytes: Uint8Array): BetPayload | null {
-  if (bytes.length < 4 || bytes[0] !== PAYLOAD_VERSION) return null
-  const optLen = bytes[1]!
-  if (bytes.length < 3 + optLen + 1) return null
-  const optionId = new TextDecoder().decode(bytes.slice(2, 2 + optLen))
-  const mode = bytes[2 + optLen]
-  const address = bytes.slice(3 + optLen)
-  if (mode === MODE_NIP44) return { optionId, rewardAddress: `nip44:${bytesToBase64(address)}` }
-  if (mode === MODE_PLAIN) return { optionId, rewardAddress: `plain:${new TextDecoder().decode(address)}` }
-  return null
-}
-
-/** The bettor's pubkey as AAD binds each bet payload to its author: a payload
- * copied into someone else's zap request fails to decrypt and is ignored. */
-function bettorAad(pubkey: string): Uint8Array {
-  return new TextEncoder().encode(`bwf-bet:${pubkey}`)
+/** Each tag's ciphertext is AAD-bound to its role and its author: copied into
+ * someone else's zap request, or into the other tag's slot, it fails to
+ * decrypt and the bet is ignored. */
+function tagAad(tag: string, bettorPubkey: string): Uint8Array {
+  return new TextEncoder().encode(`${tag}:${bettorPubkey}`)
 }
 
 /**
- * NUL-pads a reward address to the fixed MAX_REWARD_ADDRESS_CHARS length so
- * every encrypted bet payload has the same size — ciphertext length reveals
- * nothing about the address. Applied before NIP-44 (or plain) encoding.
+ * NUL-pads a reward address to exactly MAX_REWARD_ADDRESS_BYTES UTF-8 bytes
+ * (NUL is one byte, so padding count = bytes missing). Applied before NIP-44
+ * encryption. Addresses are measured in bytes, not chars — they may contain
+ * multi-byte characters — and must leave room for at least one NUL.
  */
 export function padRewardAddress(address: string): string {
-  if (address.length > MAX_REWARD_ADDRESS_CHARS) {
-    throw new Error(`Reward address must be at most ${MAX_REWARD_ADDRESS_CHARS} characters`)
+  const byteLength = new TextEncoder().encode(address).length
+  if (byteLength >= MAX_REWARD_ADDRESS_BYTES) {
+    throw new Error(`Reward address must be under ${MAX_REWARD_ADDRESS_BYTES} bytes`)
   }
-  return address.padEnd(MAX_REWARD_ADDRESS_CHARS, '\0')
+  return address + '\0'.repeat(MAX_REWARD_ADDRESS_BYTES - byteLength)
 }
 
 /** Inverse of padRewardAddress. */
@@ -75,17 +50,30 @@ export function unpadRewardAddress(address: string): string {
   return address.replace(/\0+$/, '')
 }
 
-/** Builds the NIP-57 zap request whose content carries the encrypted bet. */
+/** Builds the NIP-57 zap request whose bwf-* tags carry the encrypted bet. */
 export async function buildZapRequestTemplate(args: {
   poolId: string
   adminPubkey: string
-  /** Pubkey that will sign this request — the payload is AAD-bound to it. */
+  /** Pubkey that will sign this request — both tags are AAD-bound to it. */
   bettorPubkey: string
   amountSats: number
   relays: string[]
   payload: BetPayload
   aesKey: Uint8Array
 }): Promise<EventTemplate> {
+  if (!args.payload.optionId) throw new Error('Bad option id')
+  const [optionCt, addressCt] = await Promise.all([
+    aesEncryptBytes(
+      args.aesKey,
+      new TextEncoder().encode(args.payload.optionId),
+      tagAad(TAG_OPTION, args.bettorPubkey),
+    ),
+    aesEncryptBytes(
+      args.aesKey,
+      base64ToBytes(args.payload.rewardAddress),
+      tagAad(TAG_ADDRESS, args.bettorPubkey),
+    ),
+  ])
   return {
     kind: KIND_ZAP_REQUEST,
     created_at: Math.floor(Date.now() / 1000),
@@ -94,11 +82,11 @@ export async function buildZapRequestTemplate(args: {
       ['amount', String(args.amountSats * 1000)],
       ['p', args.adminPubkey],
       ['e', args.poolId],
+      [TAG_OPTION, bytesToBase64(optionCt)],
+      [TAG_ADDRESS, bytesToBase64(addressCt)],
       BWF_VERSION_TAG,
     ],
-    content: bytesToBase64(
-      await aesEncryptBytes(args.aesKey, encodeBetPayload(args.payload), bettorAad(args.bettorPubkey)),
-    ),
+    content: '',
   }
 }
 
@@ -148,23 +136,31 @@ export async function parseZapReceipt(receipt: Event, ctx: ReceiptContext): Prom
   }
   if (!msats || !Number.isFinite(msats) || msats <= 0) return null
 
-  let payload: BetPayload | null
+  const optionCt = request.tags.find((t) => t[0] === TAG_OPTION)?.[1]
+  const addressCt = request.tags.find((t) => t[0] === TAG_ADDRESS)?.[1]
+  if (!optionCt || !addressCt) return null
+
+  let optionId: string
+  let rewardAddress: string
   try {
-    payload = decodeBetPayload(
-      await aesDecryptBytes(ctx.aesKey, base64ToBytes(request.content), bettorAad(request.pubkey)),
+    optionId = new TextDecoder().decode(
+      await aesDecryptBytes(ctx.aesKey, base64ToBytes(optionCt), tagAad(TAG_OPTION, request.pubkey)),
+    )
+    rewardAddress = bytesToBase64(
+      await aesDecryptBytes(ctx.aesKey, base64ToBytes(addressCt), tagAad(TAG_ADDRESS, request.pubkey)),
     )
   } catch {
     return null
   }
-  if (!payload) return null
+  if (!optionId) return null
 
   return {
     receiptId: receipt.id,
     requestId: request.id,
     bettorPubkey: request.pubkey,
-    optionId: payload.optionId,
+    optionId,
     amountSats: Math.floor(msats / 1000),
-    rewardAddress: payload.rewardAddress,
+    rewardAddress,
     createdAt: request.created_at,
   }
 }

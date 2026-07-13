@@ -4,13 +4,30 @@ import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure
 import { describe, expect, it } from 'vitest'
 import { generateAesKey } from '../crypto/aes'
 import { BWF_VERSION_TAG, KIND_ZAP_RECEIPT } from '../types'
-import { buildZapRequestTemplate, padRewardAddress, parseZapReceipt, unpadRewardAddress } from './zaps'
+import {
+  buildZapRequestTemplate,
+  MAX_REWARD_ADDRESS_BYTES,
+  padRewardAddress,
+  parseZapReceipt,
+  TAG_ADDRESS,
+  TAG_OPTION,
+  unpadRewardAddress,
+} from './zaps'
 
 const bettorSk = generateSecretKey()
+const bettorPk = getPublicKey(bettorSk)
 const providerSk = generateSecretKey()
 const providerPk = getPublicKey(providerSk)
-const adminPk = getPublicKey(generateSecretKey())
+const adminSk = generateSecretKey()
+const adminPk = getPublicKey(adminSk)
 const poolId = 'ab'.repeat(32)
+
+const utf8Len = (s: string) => new TextEncoder().encode(s).length
+
+/** What the app sends as BetPayload.rewardAddress: NIP-44 of the padded address. */
+function encryptAddress(address: string): string {
+  return nip44.encrypt(padRewardAddress(address), nip44.getConversationKey(bettorSk, adminPk))
+}
 
 async function makeReceipt(opts: {
   aesKey: Uint8Array
@@ -22,10 +39,10 @@ async function makeReceipt(opts: {
     await buildZapRequestTemplate({
       poolId: opts.poolIdInRequest ?? poolId,
       adminPubkey: adminPk,
-      bettorPubkey: getPublicKey(bettorSk),
+      bettorPubkey: bettorPk,
       amountSats: opts.amountSats ?? 1000,
       relays: ['wss://relay.damus.io'],
-      payload: { optionId: 'a', rewardAddress: 'plain:winner@wallet.com' },
+      payload: { optionId: 'a', rewardAddress: encryptAddress('winner@wallet.com') },
       aesKey: opts.aesKey,
     }),
     bettorSk,
@@ -47,52 +64,96 @@ async function makeReceipt(opts: {
   )
 }
 
-describe('zap content size', () => {
-  it('is a constant 220 chars regardless of address length, under the common 255 limit', async () => {
+/** Re-wraps a (possibly re-signed) request in a fresh provider receipt. */
+function wrapInReceipt(request: Event): Event {
+  return finalizeEvent(
+    {
+      kind: KIND_ZAP_RECEIPT,
+      created_at: request.created_at + 1,
+      tags: [
+        ['p', adminPk],
+        ['e', poolId],
+        ['description', JSON.stringify(request)],
+      ],
+      content: '',
+    },
+    providerSk,
+  )
+}
+
+describe('zap request shape', () => {
+  it('leaves the content empty — clients render a plain zap, not a base64 blob', async () => {
+    const template = await buildZapRequestTemplate({
+      poolId,
+      adminPubkey: adminPk,
+      bettorPubkey: bettorPk,
+      amountSats: 1000,
+      relays: ['wss://relay.damus.io'],
+      payload: { optionId: 'a', rewardAddress: encryptAddress('winner@wallet.com') },
+      aesKey: generateAesKey(),
+    })
+    expect(template.content).toBe('')
+    expect(template.tags.find((t) => t[0] === TAG_OPTION)?.[1]).toBeTruthy()
+    expect(template.tags.find((t) => t[0] === TAG_ADDRESS)?.[1]).toBeTruthy()
+    expect(template.tags).toContainEqual(BWF_VERSION_TAG)
+  })
+
+  it('bwf tags have constant sizes regardless of address length or option picked', async () => {
     const aesKey = generateAesKey()
-    const convKey = nip44.getConversationKey(bettorSk, adminPk)
-    const lengths = new Set<number>()
-    for (const addr of ['a@b.io', 'dana@walletofsatoshi.com', 'x'.repeat(56) + '@ln.com']) {
-      const nip44Ct = nip44.encrypt(padRewardAddress(addr), convKey)
+    const optionLens = new Set<number>()
+    const addressLens = new Set<number>()
+    for (const [optionId, addr] of [
+      ['a', 'a@b.io'],
+      ['b', 'dana@walletofsatoshi.com'],
+      ['c', 'dañá@wället.com'], // multi-byte characters
+      ['d', 'x'.repeat(115) + '@ln.com'], // near the byte cap
+    ] as const) {
       const template = await buildZapRequestTemplate({
         poolId,
         adminPubkey: adminPk,
-        bettorPubkey: getPublicKey(bettorSk),
+        bettorPubkey: bettorPk,
         amountSats: 100_000,
-        relays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'],
-        payload: { optionId: 'z', rewardAddress: `nip44:${nip44Ct}` },
+        relays: ['wss://relay.damus.io'],
+        payload: { optionId, rewardAddress: encryptAddress(addr) },
         aesKey,
       })
-      lengths.add(template.content.length)
+      optionLens.add(template.tags.find((t) => t[0] === TAG_OPTION)![1]!.length)
+      addressLens.add(template.tags.find((t) => t[0] === TAG_ADDRESS)![1]!.length)
     }
-    expect(lengths).toEqual(new Set([220]))
+    expect(optionLens.size).toBe(1)
+    expect(addressLens.size).toBe(1)
   })
 })
 
 describe('reward address padding', () => {
-  it('round-trips and always pads to the same length', () => {
-    for (const addr of ['a@b.io', 'dana@walletofsatoshi.com', 'x'.repeat(56) + '@ln.com']) {
+  it('round-trips and always pads to the same byte length', () => {
+    for (const addr of ['a@b.io', 'dana@walletofsatoshi.com', 'dañá@wället.com', 'x'.repeat(120) + '@ln.com']) {
       const padded = padRewardAddress(addr)
-      expect(padded.length).toBe(63)
+      expect(utf8Len(padded)).toBe(MAX_REWARD_ADDRESS_BYTES)
       expect(unpadRewardAddress(padded)).toBe(addr)
     }
   })
 
-  it('rejects addresses longer than the cap', () => {
-    expect(() => padRewardAddress('x'.repeat(60) + '@ln.io')).toThrow(/63/)
+  it('rejects addresses of the cap byte length or more, measured in bytes', () => {
+    expect(() => padRewardAddress('x'.repeat(122) + '@ln.io')).toThrow(/128/)
+    // 64 two-byte chars: only 64 chars, but 128 bytes
+    expect(() => padRewardAddress('é'.repeat(64))).toThrow(/128/)
+    expect(padRewardAddress('é'.repeat(63))).toBeTruthy()
   })
 })
 
 describe('zap receipts as bets', () => {
-  it('reconstructs a valid bet', async () => {
+  it('reconstructs a valid bet the admin can decrypt', async () => {
     const aesKey = generateAesKey()
     const receipt = await makeReceipt({ aesKey, amountSats: 2100 })
     const bet = await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk })
     expect(bet).not.toBeNull()
     expect(bet!.optionId).toBe('a')
     expect(bet!.amountSats).toBe(2100)
-    expect(bet!.bettorPubkey).toBe(getPublicKey(bettorSk))
-    expect(bet!.rewardAddress).toBe('plain:winner@wallet.com')
+    expect(bet!.bettorPubkey).toBe(bettorPk)
+    // The admin decrypts the recovered NIP-44 ciphertext with their own key.
+    const address = nip44.decrypt(bet!.rewardAddress, nip44.getConversationKey(adminSk, bet!.bettorPubkey))
+    expect(unpadRewardAddress(address)).toBe('winner@wallet.com')
   })
 
   it('rejects receipts from an unexpected provider', async () => {
@@ -119,18 +180,36 @@ describe('zap receipts as bets', () => {
     expect(await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk })).toBeNull()
   })
 
-  it('rejects zaps whose content is not encrypted with the pool key', async () => {
+  it('rejects zaps whose tags are not encrypted with the pool key', async () => {
     const receipt = await makeReceipt({ aesKey: generateAesKey() })
     expect(
       await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey: generateAesKey(), providerPubkey: providerPk }),
     ).toBeNull()
   })
 
-  it("rejects a payload transplanted from another bettor's zap (AAD binding)", async () => {
+  it('rejects zap requests missing a bwf tag', async () => {
+    const aesKey = generateAesKey()
+    const original = await makeReceipt({ aesKey })
+    const request = JSON.parse(original.tags.find((t) => t[0] === 'description')![1]!) as Event
+    const stripped = finalizeEvent(
+      {
+        kind: request.kind,
+        created_at: request.created_at,
+        tags: request.tags.filter((t) => t[0] !== TAG_ADDRESS),
+        content: request.content,
+      },
+      bettorSk,
+    )
+    expect(
+      await parseZapReceipt(wrapInReceipt(stripped), { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk }),
+    ).toBeNull()
+  })
+
+  it("rejects tags transplanted from another bettor's zap (AAD binding)", async () => {
     const aesKey = generateAesKey()
     const original = await makeReceipt({ aesKey })
     const originalRequest = JSON.parse(original.tags.find((t) => t[0] === 'description')![1]!) as Event
-    // An attacker copies the ciphertext into their own zap request without knowing the key.
+    // An attacker copies the encrypted tags into their own zap request without knowing the key.
     const attackerSk = generateSecretKey()
     const stolen = finalizeEvent(
       {
@@ -141,20 +220,35 @@ describe('zap receipts as bets', () => {
       },
       attackerSk,
     )
-    const receipt = finalizeEvent(
-      {
-        kind: KIND_ZAP_RECEIPT,
-        created_at: stolen.created_at + 1,
-        tags: [['p', adminPk], ['e', poolId], ['description', JSON.stringify(stolen)]],
-        content: '',
-      },
-      providerSk,
-    )
-    expect(await parseZapReceipt(receipt, { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk })).toBeNull()
+    expect(
+      await parseZapReceipt(wrapInReceipt(stolen), { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk }),
+    ).toBeNull()
     // Sanity: the original, non-transplanted receipt still parses.
     expect(
       await parseZapReceipt(original, { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk }),
     ).not.toBeNull()
+  })
+
+  it('rejects a request whose bwf-option and bwf-address ciphertexts are swapped (per-tag AAD)', async () => {
+    const aesKey = generateAesKey()
+    const original = await makeReceipt({ aesKey })
+    const request = JSON.parse(original.tags.find((t) => t[0] === 'description')![1]!) as Event
+    const optionCt = request.tags.find((t) => t[0] === TAG_OPTION)![1]!
+    const addressCt = request.tags.find((t) => t[0] === TAG_ADDRESS)![1]!
+    const swapped = finalizeEvent(
+      {
+        kind: request.kind,
+        created_at: request.created_at,
+        tags: request.tags.map((t) =>
+          t[0] === TAG_OPTION ? [TAG_OPTION, addressCt] : t[0] === TAG_ADDRESS ? [TAG_ADDRESS, optionCt] : t,
+        ),
+        content: request.content,
+      },
+      bettorSk,
+    )
+    expect(
+      await parseZapReceipt(wrapInReceipt(swapped), { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk }),
+    ).toBeNull()
   })
 
   it('a self-signed forged receipt (no real payment) is rejected outright', async () => {
@@ -167,10 +261,10 @@ describe('zap receipts as bets', () => {
       await buildZapRequestTemplate({
         poolId,
         adminPubkey: adminPk,
-        bettorPubkey: getPublicKey(bettorSk),
+        bettorPubkey: bettorPk,
         amountSats: 1_000_000, // claim a huge bet
         relays: ['wss://relay.damus.io'],
-        payload: { optionId: 'a', rewardAddress: 'plain:attacker@wallet.com' },
+        payload: { optionId: 'a', rewardAddress: encryptAddress('attacker@wallet.com') },
         aesKey,
       }),
       bettorSk,
@@ -188,20 +282,5 @@ describe('zap receipts as bets', () => {
     expect(
       await parseZapReceipt(forgedReceipt, { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk }),
     ).toBeNull()
-  })
-})
-
-describe('bwf-version tag', () => {
-  it('is attached to the zap request', async () => {
-    const template = await buildZapRequestTemplate({
-      poolId,
-      adminPubkey: adminPk,
-      bettorPubkey: getPublicKey(bettorSk),
-      amountSats: 1000,
-      relays: ['wss://relay.damus.io'],
-      payload: { optionId: 'a', rewardAddress: 'plain:winner@wallet.com' },
-      aesKey: generateAesKey(),
-    })
-    expect(template.tags).toContainEqual(BWF_VERSION_TAG)
   })
 })
