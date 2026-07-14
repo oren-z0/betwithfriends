@@ -2,6 +2,7 @@
 // "pays" every invoice instantly by publishing a kind-9735 zap receipt.
 import http from 'node:http'
 import { WebSocketServer, WebSocket } from 'ws'
+import { bech32 } from '@scure/base'
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 
 const RELAY_PORT = 7777
@@ -90,8 +91,10 @@ const wallet = http.createServer((req, res) => {
   if (url.pathname.startsWith('/callback/')) {
     const amount = Number(url.searchParams.get('amount'))
     const nostr = url.searchParams.get('nostr')
-    // Fake invoice: undecodable by light-bolt11-decoder → app falls back to the amount tag.
-    const pr = 'lnbc1mockinvoice' + Math.random().toString(36).slice(2)
+    // Mock invoice that light-bolt11-decoder can read the amount from: valid
+    // bech32 with the msats in the HRP (1 pico-BTC = 0.1 msat), a zeroed
+    // timestamp and a zeroed signature. Not payable, but decodable.
+    const pr = bech32.encode(`lnbc${amount * 10}p`, new Array(7 + 104).fill(0), 1023)
     if (nostr) {
       // Simulate instant payment: publish the zap receipt right away.
       const zapRequest = JSON.parse(nostr)

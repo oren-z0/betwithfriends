@@ -127,13 +127,11 @@ export async function parseZapReceipt(receipt: Event, ctx: ReceiptContext): Prom
   if (!request.tags.some((t) => t[0] === 'e' && t[1] === ctx.poolId)) return null
   if (!request.tags.some((t) => t[0] === 'p' && t[1] === ctx.adminPubkey)) return null
 
-  // The paid amount comes from the invoice; fall back to the requested amount tag.
+  // The paid amount comes from the invoice, which must encode it: an
+  // amountless invoice could be paid with any number of sats, so the receipt
+  // would prove a payment happened but not how big the bet was.
   const bolt11 = receipt.tags.find((t) => t[0] === 'bolt11')?.[1]
-  let msats = bolt11 ? bolt11AmountMsats(bolt11) : null
-  if (msats === null) {
-    const amountTag = request.tags.find((t) => t[0] === 'amount')?.[1]
-    msats = amountTag ? Number(amountTag) : null
-  }
+  const msats = bolt11 ? bolt11AmountMsats(bolt11) : null
   if (!msats || !Number.isFinite(msats) || msats <= 0) return null
 
   const optionCt = request.tags.find((t) => t[0] === TAG_OPTION)?.[1]

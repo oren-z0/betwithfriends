@@ -85,9 +85,12 @@ export async function requestInvoice(
   const data = (await res.json()) as Record<string, unknown>
   if (data.status === 'ERROR') throw new Error(`Invoice request rejected: ${data.reason ?? 'unknown'}`)
   if (typeof data.pr !== 'string') throw new Error('Wallet did not return an invoice')
+  // The invoice must encode the exact amount: bets are only counted from the
+  // amount in the receipt's invoice, so an amountless invoice would pay for a
+  // bet that never registers.
   const invoiceMsats = bolt11AmountMsats(data.pr)
-  if (invoiceMsats !== null && invoiceMsats !== amountMsats) {
-    throw new Error('Wallet returned an invoice with a different amount — aborting')
+  if (invoiceMsats !== amountMsats) {
+    throw new Error('Wallet returned an invoice without the expected amount — aborting')
   }
   return data.pr
 }

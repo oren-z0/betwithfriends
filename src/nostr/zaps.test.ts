@@ -1,3 +1,4 @@
+import { bech32 } from '@scure/base'
 import type { Event } from 'nostr-tools/core'
 import * as nip44 from 'nostr-tools/nip44'
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure'
@@ -29,11 +30,19 @@ function encryptAddress(address: string): string {
   return nip44.encrypt(padRewardAddress(address), nip44.getConversationKey(bettorSk, adminPk))
 }
 
+/** Decodable-but-unpayable bolt11: the msats in the HRP (1 pBTC = 0.1 msat),
+ * a zeroed timestamp and a zeroed signature. Same trick as the e2e harness. */
+function fakeBolt11(msats: number): string {
+  return bech32.encode(`lnbc${msats * 10}p`, new Array(7 + 104).fill(0), 1023)
+}
+
 async function makeReceipt(opts: {
   aesKey: Uint8Array
   poolIdInRequest?: string
   amountSats?: number
   tamperRequestSig?: boolean
+  /** Override the receipt's bolt11 tag; null omits it entirely. */
+  bolt11?: string | null
 }): Promise<Event> {
   const request = finalizeEvent(
     await buildZapRequestTemplate({
@@ -48,24 +57,14 @@ async function makeReceipt(opts: {
     bettorSk,
   )
   if (opts.tamperRequestSig) request.sig = request.sig.replace(/^./, request.sig.startsWith('0') ? '1' : '0')
-  // No bolt11 tag in this synthetic receipt → the parser falls back to the amount tag.
-  return finalizeEvent(
-    {
-      kind: KIND_ZAP_RECEIPT,
-      created_at: request.created_at + 1,
-      tags: [
-        ['p', adminPk],
-        ['e', poolId],
-        ['description', JSON.stringify(request)],
-      ],
-      content: '',
-    },
-    providerSk,
-  )
+  return wrapInReceipt(request, { bolt11: opts.bolt11 })
 }
 
-/** Re-wraps a (possibly re-signed) request in a fresh provider receipt. */
-function wrapInReceipt(request: Event): Event {
+/** Wraps a request in a provider receipt whose invoice carries the requested
+ * amount (or an override for testing bolt11 handling). */
+function wrapInReceipt(request: Event, opts: { bolt11?: string | null } = {}): Event {
+  const requestedMsats = Number(request.tags.find((t) => t[0] === 'amount')?.[1] ?? 1_000_000)
+  const bolt11 = opts.bolt11 === undefined ? fakeBolt11(requestedMsats) : opts.bolt11
   return finalizeEvent(
     {
       kind: KIND_ZAP_RECEIPT,
@@ -73,6 +72,7 @@ function wrapInReceipt(request: Event): Event {
       tags: [
         ['p', adminPk],
         ['e', poolId],
+        ...(bolt11 === null ? [] : [['bolt11', bolt11]]),
         ['description', JSON.stringify(request)],
       ],
       content: '',
@@ -154,6 +154,15 @@ describe('zap receipts as bets', () => {
     // The admin decrypts the recovered NIP-44 ciphertext with their own key.
     const address = nip44.decrypt(bet!.rewardAddress, nip44.getConversationKey(adminSk, bet!.bettorPubkey))
     expect(unpadRewardAddress(address)).toBe('winner@wallet.com')
+  })
+
+  it('rejects receipts whose invoice is missing, undecodable, or amountless', async () => {
+    const aesKey = generateAesKey()
+    const ctx = { poolId, adminPubkey: adminPk, aesKey, providerPubkey: providerPk }
+    expect(await parseZapReceipt(await makeReceipt({ aesKey, bolt11: null }), ctx)).toBeNull()
+    expect(await parseZapReceipt(await makeReceipt({ aesKey, bolt11: 'lnbc1mockinvoice' }), ctx)).toBeNull()
+    const amountless = bech32.encode('lnbc', new Array(7 + 104).fill(0), 1023)
+    expect(await parseZapReceipt(await makeReceipt({ aesKey, bolt11: amountless }), ctx)).toBeNull()
   })
 
   it('rejects receipts from an unexpected provider', async () => {

@@ -36,9 +36,10 @@ screenshots land in `e2e/shots/`.
 
 - Lightning addresses on `localhost:<port>` resolve over **http** (see
   `lightningAddressToUrl`) — that's what makes the mock wallet reachable.
-- The mock wallet's invoices are not real bolt11; the app falls back to the zap
-  request's `amount` tag for the amount (`parseZapReceipt`), which is exactly
-  the production fallback path.
+- The mock wallet's invoices are decodable-but-unpayable bolt11 (valid bech32,
+  amount in the HRP, zeroed signature). The amount MUST decode from the
+  invoice: `parseZapReceipt` ignores receipts whose invoice is missing or
+  amountless, and `requestInvoice` refuses to pay one.
 - Unit tests: `npx vitest run` (crypto round-trips, payout math, event/zap
   parsing). Build: `npm run build`.
 - Real-sats smoke test (optional, manual): run without `VITE_DEFAULT_RELAYS`,
