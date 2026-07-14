@@ -551,6 +551,11 @@ label {
   overflow-y: auto;
   max-height: 200px;
   line-height: 1.4;
+  scrollbar-width: none;
+}
+
+.comment-form textarea::-webkit-scrollbar {
+  display: none;
 }
 
 /* payouts */
