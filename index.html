@@ -461,8 +461,11 @@
                       <p class="dim">There are no bets to pay out.</p>
                     </template>
                     <template x-for="p in payouts" :key="p.bet.receiptId">
-                      <div class="payout-row" :class="{ paid: p.paid }">
-                        <span class="who" x-text="displayName(p.bet.bettorPubkey)"></span>
+                      <div class="payout-row" :class="{ paid: p.paid }" x-init="decryptRewardAddress(p.bet)">
+                        <div class="who">
+                          <span x-text="displayName(p.bet.bettorPubkey)"></span>
+                          <div class="sub" x-text="decryptedAddresses[p.bet.receiptId] ?? '…'"></div>
+                        </div>
                         <span class="amt"><span x-text="fmtSats(p.amountSats)"></span> sats</span>
                         <button class="btn small primary" x-show="!p.paid" @click="openPayout(p)">Pay</button>
                         <button class="btn small" @click="togglePaid(p)" x-text="p.paid ? 'Unmark' : 'Mark paid'"></button>
