@@ -292,7 +292,7 @@ label {
 
 .pool-title-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin: 14px 0 4px;
@@ -309,7 +309,6 @@ label {
 
 .admin-avatar {
   flex: none;
-  margin-top: 2px;
 }
 
 .admin-avatar img {
@@ -324,7 +323,6 @@ label {
 
 .share-btn {
   flex: none;
-  margin-top: 4px;
 }
 
 .pool-sub {
